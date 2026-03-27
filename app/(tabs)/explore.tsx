@@ -14,7 +14,7 @@ export default function TabTwoScreen() {
 
   useEffect(() => {
     // 백엔드 주소 (개발용 PC IP)
-    fetch('http://localhost:8080/api/hello')
+    fetch('http://douzonesumin.kro.kr:8082/api/hello')
       .then(res => res.text())
       .then(data => setBackendMsg(data))
       .catch(err => setBackendMsg('Error connecting to backend'));
