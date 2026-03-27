@@ -1,50 +1,195 @@
-# Welcome to your Expo app 👋
+# 📱 AlbaLog (알바로그)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+알바 근무를 기록하고 관리하는 React Native 앱입니다.
 
-## Get started
+---
 
-1. Install dependencies
+## 🚀 실행 방법
 
-   ```bash
-   npm install
-   ```
+### 1️⃣ 필수 설치
 
-2. Start the app
+아래 프로그램이 설치되어 있어야 합니다.
 
-   ```bash
-   npx expo start
-   ```
+- Node.js (LTS 버전 권장)
+- npm (Node 설치 시 같이 설치됨)
+- Expo Go 앱 (핸드폰)
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+설치 확인:
 ```bash
-npm run reset-project
+node -v
+npm -v
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+---
 
-## Learn more
+### 2️⃣ 프로젝트 실행
 
-To learn more about developing your project with Expo, look at the following resources:
+```bash
+npm install
+npm start
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+---
 
-## Join the community
+### 3️⃣ 앱 실행 방법
 
-Join our community of developers creating universal apps.
+1. 터미널에 QR코드가 표시됨
+2. 핸드폰에서 **Expo Go 앱 실행**
+3. QR코드 스캔
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+
+### ⚠️ 중요
+
+- PC와 핸드폰은 **같은 와이파이**에 연결되어 있어야 합니다.
+
+---
+
+## 📁 폴더 구조
+
+```
+app/         → 화면 (페이지)
+components/  → 재사용 컴포넌트
+constants/   → 색상, 설정값
+hooks/       → 커스텀 훅
+scripts/     → 실행 스크립트
+```
+
+---
+
+## 📌 폴더 사용 규칙
+
+### 🔹 app/
+- 화면(UI 페이지) 작성
+- 파일 이름 = 라우팅 경로
+
+예:
+```
+app/index.tsx      → 홈 화면
+app/login.tsx      → 로그인 화면
+```
+
+---
+
+### 🔹 components/
+- 재사용 가능한 UI 컴포넌트
+
+예:
+```
+Button.tsx
+Card.tsx
+```
+
+- 화면 로직 ❌ (UI 중심으로 작성)
+
+---
+
+### 🔹 constants/
+- 색상, 테마, 설정값
+
+---
+
+### 🔹 hooks/
+- 커스텀 훅
+
+---
+
+### 🔹 scripts/
+- 실행 스크립트
+
+---
+
+## 🔥 Git 협업 규칙
+
+### 브랜치 구조
+
+```
+main      → 최종 배포
+dev       → 개발 통합
+feature/* → 기능 개발
+```
+
+---
+
+## 🔄 브랜치 작업 방법
+
+### 1️⃣ 최신 코드 가져오기
+```bash
+git checkout dev
+git pull origin dev
+```
+
+---
+
+### 2️⃣ 기능 브랜치 생성
+```bash
+git checkout -b feature/login
+```
+
+---
+
+### 3️⃣ 작업 후 커밋
+```bash
+git add .
+git commit -m "feat: 로그인 기능 구현"
+```
+
+---
+
+### 4️⃣ 원격 저장소에 push
+```bash
+git push origin feature/login
+```
+
+---
+
+### 5️⃣ GitHub에서 PR 생성
+- feature → dev로 Pull Request 생성
+
+---
+
+### 6️⃣ 브랜치 이동
+```bash
+git checkout dev
+git checkout main
+```
+
+---
+
+### 7️⃣ 브랜치 목록 확인
+```bash
+git branch
+```
+
+---
+
+## ❗ 협업 규칙
+
+- main 직접 push ❌
+- dev 직접 push ❌ (PR 사용 권장)
+- 기능 단위로 브랜치 생성
+- 작업 전 항상 `git pull`
+
+---
+
+## 💡 개발 팁
+
+- 코드 수정 시 자동 반영됨
+- 새로고침: `r`
+- 캐시 초기화:
+```bash
+npm start -- --reset-cache
+```
+
+---
+
+## 📌 참고
+
+- Expo 기반 프로젝트
+- Android / iOS / Web 지원
+
+---
+
+## 👍 한 줄 정리
+
+👉 화면은 app, 재사용은 components, 협업은 PR
