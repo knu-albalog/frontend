@@ -66,7 +66,7 @@ export default function HomeScreen() {
   };
 
   const menuItems = [
-    { id: 1, name: '게시판', icon: 'reader-outline', path: '/notice' },
+    { id: 1, name: '게시판', icon: 'reader-outline', path: '/board' },
     { id: 2, name: '투두리스트', icon: 'list-outline', path: '/todolist' },
     { id: 3, name: '대타신청', icon: 'repeat-outline', path: '/substitute' },
     { id: 4, name: '스케줄표', icon: 'calendar-outline', path: '/schedule' },
@@ -189,7 +189,7 @@ export default function HomeScreen() {
             activeOpacity={0.9}
             onPress={() =>
               router.push({
-                pathname: '/notice-detail',
+                pathname: '/comment',
                 params: {
                   boardTitle: latestNotice.boardTitle,
                   title: latestNotice.title,
