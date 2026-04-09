@@ -114,8 +114,8 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 메인 프로필 카드 */}
-        <TouchableOpacity style={styles.profileCard} activeOpacity={0.9}>
+        {/* 프로필 카드 */}
+        <View style={styles.profileCard}>
           <View style={styles.profileCardTop}>
             <View style={styles.profileLeft}>
               <Image
@@ -124,14 +124,11 @@ export default function HomeScreen() {
                 }}
                 style={styles.avatar}
               />
-
               <View>
                 <Text style={styles.cardName}>{userData.name}</Text>
                 <Text style={styles.cardRole}>{userData.role}</Text>
               </View>
             </View>
-
-            <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
           </View>
 
           <View style={styles.profileMetaRow}>
@@ -164,7 +161,7 @@ export default function HomeScreen() {
               <Text style={styles.cardInfoText}>{userData.time}</Text>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
 
         {/* 메뉴 */}
         <View style={styles.menuContainer}>
@@ -185,12 +182,7 @@ export default function HomeScreen() {
 
         {/* 공지사항 */}
         <View style={styles.noticeSection}>
-          <View style={styles.noticeHeader}>
-            <Text style={styles.noticeTitle}>공지사항</Text>
-            <TouchableOpacity onPress={() => router.push('/notice')}>
-              <Text style={styles.noticeMore}>더보기</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.noticeTitle}>공지사항</Text>
 
           <TouchableOpacity
             style={styles.noticeCard}
@@ -228,7 +220,7 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {/* 우측 하단 워키 버튼 */}
+      {/* 워키 버튼 */}
       <TouchableOpacity
         style={styles.floatingButton}
         activeOpacity={0.9}
@@ -255,7 +247,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 24,
     paddingTop: 20,
-    paddingBottom: 120,
+    paddingBottom: 130,
   },
 
   header: {
@@ -301,7 +293,6 @@ const styles = StyleSheet.create({
 
   profileCardTop: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
 
@@ -352,7 +343,7 @@ const styles = StyleSheet.create({
 
   cardDivider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     marginVertical: 16,
   },
 
@@ -380,7 +371,7 @@ const styles = StyleSheet.create({
   menuContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 32,
+    marginBottom: 46,
   },
 
   menuItem: {
@@ -407,39 +398,28 @@ const styles = StyleSheet.create({
   },
 
   noticeSection: {
-    marginTop: 4,
-  },
-
-  noticeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
+    marginTop: 8,
+    paddingTop: 10,
   },
 
   noticeTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#202020',
-  },
-
-  noticeMore: {
-    fontSize: 13,
-    color: '#2140DC',
-    fontWeight: '600',
+    marginBottom: 14,
   },
 
   noticeCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 18,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#EEF1F6',
+    borderColor: '#E9EEF8',
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 3,
   },
 
   noticeTopRow: {
