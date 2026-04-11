@@ -21,7 +21,7 @@ export default function NoticeDetailScreen() {
   const date = String(params.date ?? '방금');
   const content = String(
     params.content ??
-      '안녕하세요, 매니저 김민입니다.\n\n이번 주부터 새로운 메뉴가 출시되어 안내드립니다.'
+      '안녕하세요, 매니저 김입니다.\n\n이번 주부터 새로운 메뉴가 출시되어 안내드립니다.'
   );
   const isNew = String(params.isNew ?? 'false') === 'true';
 
