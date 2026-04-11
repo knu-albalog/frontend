@@ -1,25 +1,45 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+
+type TabItemProps = {
+  focused: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  activeIcon: keyof typeof Ionicons.glyphMap;
+  label: string;
+};
+
+function TabBarItem({ focused, icon, activeIcon, label }: TabItemProps) {
+  return (
+    <View style={styles.tabItem}>
+      <View style={[styles.iconWrap, focused && styles.iconWrapFocused]}>
+        <Ionicons
+          name={focused ? activeIcon : icon}
+          size={22}
+          color={focused ? '#2F4AFF' : '#A0A0A0'}
+        />
+      </View>
+      <Text style={[styles.tabLabel, focused && styles.tabLabelFocused]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#2140DC',
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarShowLabel: false,
         tabBarStyle: {
-          height: 68,
+          height: Platform.OS === 'ios' ? 82 : 68,
           paddingTop: 8,
-          paddingBottom: 8,
+          paddingBottom: Platform.OS === 'ios' ? 18 : 8,
           backgroundColor: '#FFFFFF',
           borderTopWidth: 1,
           borderTopColor: '#F0F0F0',
-        },
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
         },
       }}
     >
@@ -27,8 +47,13 @@ export default function TabLayout() {
         name="index"
         options={{
           title: '홈',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="home-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabBarItem
+              focused={focused}
+              icon="home-outline"
+              activeIcon="home"
+              label="홈"
+            />
           ),
         }}
       />
@@ -37,8 +62,13 @@ export default function TabLayout() {
         name="calendar"
         options={{
           title: '캘린더',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="calendar-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabBarItem
+              focused={focused}
+              icon="calendar-outline"
+              activeIcon="calendar"
+              label="캘린더"
+            />
           ),
         }}
       />
@@ -47,8 +77,13 @@ export default function TabLayout() {
         name="request"
         options={{
           title: '요구사항',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="document-text-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabBarItem
+              focused={focused}
+              icon="chatbubbles-outline"
+              activeIcon="chatbubbles"
+              label="요구사항"
+            />
           ),
         }}
       />
@@ -57,11 +92,44 @@ export default function TabLayout() {
         name="mypage"
         options={{
           title: '마이페이지',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person-outline" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabBarItem
+              focused={focused}
+              icon="person-outline"
+              activeIcon="person"
+              label="마이"
+            />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabItem: {
+    width: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapFocused: {
+    backgroundColor: '#F0F4FF',
+  },
+  tabLabel: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#A0A0A0',
+    fontWeight: '500',
+  },
+  tabLabelFocused: {
+    color: '#2F4AFF',
+    fontWeight: '700',
+  },
+});
