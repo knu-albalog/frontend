@@ -1,35 +1,135 @@
-import { Tabs } from 'expo-router';
 import React from 'react';
+import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+type TabItemProps = {
+  focused: boolean;
+  icon: keyof typeof Ionicons.glyphMap;
+  activeIcon: keyof typeof Ionicons.glyphMap;
+  label: string;
+};
+
+function TabBarItem({ focused, icon, activeIcon, label }: TabItemProps) {
+  return (
+    <View style={styles.tabItem}>
+      <View style={[styles.iconWrap, focused && styles.iconWrapFocused]}>
+        <Ionicons
+          name={focused ? activeIcon : icon}
+          size={22}
+          color={focused ? '#2F4AFF' : '#A0A0A0'}
+        />
+      </View>
+      <Text style={[styles.tabLabel, focused && styles.tabLabelFocused]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
+        tabBarShowLabel: false,
+        tabBarStyle: {
+          height: Platform.OS === 'ios' ? 82 : 68,
+          paddingTop: 8,
+          paddingBottom: Platform.OS === 'ios' ? 18 : 8,
+          backgroundColor: '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: '#F0F0F0',
+        },
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: '홈',
+          tabBarIcon: ({ focused }) => (
+            <TabBarItem
+              focused={focused}
+              icon="home-outline"
+              activeIcon="home"
+              label="홈"
+            />
+          ),
         }}
       />
+
       <Tabs.Screen
-        name="explore"
+        name="calendar"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: '캘린더',
+          tabBarIcon: ({ focused }) => (
+            <TabBarItem
+              focused={focused}
+              icon="calendar-outline"
+              activeIcon="calendar"
+              label="캘린더"
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="request"
+        options={{
+          title: '요구사항',
+          tabBarIcon: ({ focused }) => (
+            <TabBarItem
+              focused={focused}
+              icon="chatbubbles-outline"
+              activeIcon="chatbubbles"
+              label="요구사항"
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="mypage"
+        options={{
+          title: '마이페이지',
+          tabBarIcon: ({ focused }) => (
+            <TabBarItem
+              focused={focused}
+              icon="person-outline"
+              activeIcon="person"
+              label="마이"
+            />
+          ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabItem: {
+    width: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrapFocused: {
+    backgroundColor: '#F0F4FF',
+  },
+  tabLabel: {
+    marginTop: 4,
+    fontSize: 11,
+    color: '#A0A0A0',
+    fontWeight: '500',
+  },
+  tabLabelFocused: {
+    color: '#2F4AFF',
+    fontWeight: '700',
+  },
+});
