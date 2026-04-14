@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -7,9 +7,21 @@ import {
   View,
   ScrollView,
   TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+
+type CommentType = {
+  id: number;
+  name: string;
+  text: string;
+  time: string;
+  color: string;
+  isMine: boolean;
+};
 
 export default function NoticeDetailScreen() {
   const router = useRouter();
@@ -19,45 +31,107 @@ export default function NoticeDetailScreen() {
   const title = String(params.title ?? '신메뉴 출시');
   const author = String(params.author ?? '알밤사장');
   const date = String(params.date ?? '방금');
-  const content = String(
-    params.content ??
-      '안녕하세요, 매니저 김입니다.\n\n이번 주부터 새로운 메뉴가 출시되어 안내드립니다.'
-  );
+  const content = String(params.content ?? '');
   const isNew = String(params.isNew ?? 'false') === 'true';
 
-  const comments = [
-    { id: 1, name: '알밤사원', text: '네 확인했습니다!', time: '5분 전', color: '#F5A623' },
-    { id: 2, name: '알밤생B', text: '감사합니다', time: '3분 전', color: '#F78FB3' },
-    { id: 3, name: '알밤생C', text: '넵', time: '방금', color: '#6C8AE4' },
-  ];
+  const [comments, setComments] = useState<CommentType[]>([
+    { id: 1, name: '알밤사원', text: '네 확인했습니다!', time: '5분 전', color: '#F5A623', isMine: false },
+    { id: 2, name: '알밤생B', text: '감사합니다', time: '3분 전', color: '#F78FB3', isMine: false },
+  ]);
+
+  const [inputText, setInputText] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  // 등록 / 수정
+  const handleSubmit = () => {
+    if (inputText.trim() === '') return;
+
+    if (editingId !== null) {
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === editingId ? { ...c, text: inputText } : c
+        )
+      );
+      setEditingId(null);
+    } else {
+      const newComment: CommentType = {
+        id: Date.now(),
+        name: '나',
+        text: inputText,
+        time: '방금',
+        color: '#2140DC',
+        isMine: true,
+      };
+      setComments((prev) => [...prev, newComment]);
+    }
+
+    setInputText('');
+  };
+
+  // 삭제
+  const handleDelete = (id: number) => {
+    Alert.alert('삭제', '댓글을 삭제하시겠습니까?', [
+      { text: '취소', style: 'cancel' },
+      {
+        text: '삭제',
+        style: 'destructive',
+        onPress: () => {
+          setComments((prev) => prev.filter((c) => c.id !== id));
+        },
+      },
+    ]);
+  };
+
+  // 수정
+  const handleEdit = (comment: CommentType) => {
+    setInputText(comment.text);
+    setEditingId(comment.id);
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="chevron-back" size={22} color="#2140DC" />
-        </TouchableOpacity>
-
-        <Text style={styles.headerTitle}>{boardTitle}</Text>
-
-        <View style={styles.headerRight} />
-      </View>
-
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>{title}</Text>
-          {isNew && <Text style={styles.newTag}>new</Text>}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'android' ? 100 : 0}
+      >
+        {/* 헤더 */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={22} color="#2140DC" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{boardTitle}</Text>
+          <View style={{ width: 24 }} />
         </View>
 
-        <View style={styles.postBox}>
-          <Text style={styles.content}>{content}</Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.contentContainer}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* 제목 */}
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>{title}</Text>
+            {isNew && <Text style={styles.newTag}>new</Text>}
+          </View>
 
-        <View style={styles.commentSection}>
+          {/* 작성자 + 시간 */}
+          <View style={styles.infoRow}>
+            <Text style={styles.infoText}>{author}</Text>
+            <Text style={styles.infoText}>{date}</Text>
+          </View>
+
+          {/* 본문 */}
+          <View style={styles.postBox}>
+            <Text style={styles.content}>{content}</Text>
+          </View>
+
+          {/* 댓글 */}
           {comments.map((comment) => (
             <View key={comment.id} style={styles.commentItem}>
               <View style={[styles.avatarCircle, { backgroundColor: comment.color }]}>
-                <Text style={styles.avatarText}>{comment.name.charAt(comment.name.length - 1)}</Text>
+                <Text style={styles.avatarText}>
+                  {comment.name.charAt(0)}
+                </Text>
               </View>
 
               <View style={styles.commentContent}>
@@ -65,32 +139,49 @@ export default function NoticeDetailScreen() {
                   <Text style={styles.commentName}>{comment.name}</Text>
                   <Text style={styles.commentTime}>{comment.time}</Text>
                 </View>
+
                 <Text style={styles.commentText}>{comment.text}</Text>
+
+                {/* 내가 쓴 댓글만 */}
+                {comment.isMine && (
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity onPress={() => handleEdit(comment)}>
+                      <Text style={styles.actionText}>수정</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleDelete(comment.id)}>
+                      <Text style={[styles.actionText, { color: '#FF3B30' }]}>
+                        삭제
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </View>
           ))}
-        </View>
-      </ScrollView>
+        </ScrollView>
 
-      <View style={styles.inputContainer}>
-        <TextInput
-          placeholder="댓글을 작성해주세요"
-          placeholderTextColor="#B5B5B5"
-          style={styles.input}
-        />
-        <TouchableOpacity style={styles.submitButton}>
-          <Text style={styles.submitButtonText}>등록</Text>
-        </TouchableOpacity>
-      </View>
+        {/* 입력창 */}
+        <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="댓글을 작성해주세요"
+            placeholderTextColor="#B5B5B5"
+            style={styles.input}
+            value={inputText}
+            onChangeText={setInputText}
+          />
+          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+            <Text style={styles.submitButtonText}>
+              {editingId !== null ? '수정' : '등록'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
+  safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
 
   header: {
     height: 56,
@@ -98,56 +189,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-  },
-
-  backButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 
   headerTitle: {
-    flex: 1,
-    textAlign: 'center',
     fontSize: 15,
     fontWeight: '700',
-    color: '#222222',
-  },
-
-  headerRight: {
-    width: 32,
-  },
-
-  container: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
   },
 
   contentContainer: {
     paddingHorizontal: 16,
-    paddingTop: 12,
     paddingBottom: 100,
   },
 
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 8,
   },
 
   title: {
     flex: 1,
-    fontSize: 26,
+    fontSize: 22,
     fontWeight: '800',
-    color: '#111111',
   },
 
   newTag: {
-    fontSize: 12,
-    fontWeight: '700',
     color: '#FF3B30',
+    fontSize: 12,
+  },
+
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+
+  infoText: {
+    fontSize: 12,
+    color: '#999',
   },
 
   postBox: {
@@ -155,18 +233,12 @@ const styles = StyleSheet.create({
     borderColor: '#E8E8E8',
     borderRadius: 8,
     padding: 16,
-    backgroundColor: '#FFFFFF',
     marginBottom: 20,
   },
 
   content: {
-    fontSize: 15,
-    lineHeight: 25,
-    color: '#333333',
-  },
-
-  commentSection: {
-    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 22,
   },
 
   commentItem: {
@@ -184,46 +256,49 @@ const styles = StyleSheet.create({
   },
 
   avatarText: {
-    color: '#FFFFFF',
+    color: '#fff',
     fontWeight: '700',
-    fontSize: 12,
   },
 
   commentContent: {
     flex: 1,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F1F1',
-    paddingBottom: 12,
+    paddingBottom: 10,
   },
 
   commentTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
   },
 
   commentName: {
-    fontSize: 13,
     fontWeight: '700',
-    color: '#222222',
+    fontSize: 13,
   },
 
   commentTime: {
     fontSize: 11,
-    color: '#B0B0B0',
+    color: '#999',
   },
 
   commentText: {
     fontSize: 13,
-    color: '#555555',
-    lineHeight: 18,
+    marginTop: 4,
+  },
+
+  actionRow: {
+    flexDirection: 'row',
+    marginTop: 6,
+    gap: 12,
+  },
+
+  actionText: {
+    fontSize: 12,
+    color: '#2140DC',
   },
 
   inputContainer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
@@ -240,7 +315,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingHorizontal: 14,
     fontSize: 13,
-    color: '#222222',
     marginRight: 8,
   },
 

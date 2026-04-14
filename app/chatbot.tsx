@@ -14,8 +14,6 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-// ✅ 로고 이미지 로드 (경로를 본인의 프로젝트에 맞게 수정해주세요)
-// image_8.png 파일을 assets/images 폴더에 넣었다고 가정합니다.
 const WORKY_LOGO = require('../assets/images/worky_logo.png');
 
 // 💬 메시지 타입 정의
