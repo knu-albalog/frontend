@@ -66,10 +66,14 @@ export default function BoardScreen() {
       <View style={styles.container}>
         
         <View style={styles.header}>
-          {/* 이전 화면으로 돌아가는 백버튼 */}
-          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          {/* 🔥 수정된 부분 */}
+          <TouchableOpacity 
+            onPress={() => router.replace('/')} 
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Ionicons name="chevron-back" size={26} color="#111" />
           </TouchableOpacity>
+
           <Text style={styles.headerTitle}>게시판</Text>
           <View style={{ width: 26 }} /> 
         </View>
@@ -94,11 +98,10 @@ export default function BoardScreen() {
                 key={board.id} 
                 style={styles.boardCard} 
                 activeOpacity={0.7}
-                // 💡 여기서 post-list 화면으로 이동!
                 onPress={() => {
                   router.push({
                     pathname: '/post-list', 
-                    params: { title: board.title, category: board.category }
+                    params: { boardTitle: board.title, category: board.category }
                   });
                 }}
               >
@@ -120,7 +123,6 @@ export default function BoardScreen() {
         <Text style={styles.fabText}>게시판 생성</Text>
       </TouchableOpacity>
 
-      {/* 팝업 모달 영역 */}
       <Modal visible={isModalOpen} transparent={true} animationType="fade">
         <Pressable 
           style={styles.modalOverlay} 
