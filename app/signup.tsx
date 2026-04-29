@@ -1,19 +1,52 @@
 import React, { useState } from 'react';
-import { SafeAreaView, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
+import { 
+  SafeAreaView, Text, StyleSheet, TouchableOpacity, 
+  TextInput, ScrollView, Alert, ActivityIndicator 
+} from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { publicRequest } from '../utils/api';
 
 export default function SignupScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const role = params.role as string;
+  const role = params.role as string; // 'owner' | 'worker'
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const isValid = email && password && passwordConfirm && name && password === passwordConfirm;
+
+  const handleSignup = async () => {
+    if (!isValid) return;
+
+    setLoading(true);
+    try {
+      await publicRequest('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password.trim(),
+          name: name.trim(),
+          role: role === 'owner' ? 1 : 0, // 사장님: 1, 알바생: 0
+        }),
+      });
+
+      Alert.alert('회원가입 성공', '로그인 해주세요.', [
+        {
+          text: '확인',
+          onPress: () => router.push({ pathname: '/login', params: { role } }),
+        },
+      ]);
+    } catch (error: any) {
+      Alert.alert('회원가입 실패', error.message || '다시 시도해주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -61,17 +94,25 @@ export default function SignupScreen() {
         />
 
         <TouchableOpacity
-          style={[styles.signupBtn, !isValid && { backgroundColor: '#BDBDBD' }]}
-          disabled={!isValid}
+          style={[styles.signupBtn, (!isValid || loading) && { backgroundColor: '#BDBDBD' }]}
+          disabled={!isValid || loading}
           activeOpacity={0.8}
-          onPress={() => router.push({ pathname: '/login', params: { role: role } })}
+          onPress={handleSignup}
         >
-          <Text style={styles.signupBtnText}>회원가입</Text>
+          {loading 
+            ? <ActivityIndicator color="#FFF" /> 
+            : <Text style={styles.signupBtnText}>회원가입</Text>
+          }
         </TouchableOpacity>
 
         <Text style={styles.bottomText}>
           이미 사용 중인 아이디 / 비밀번호가 기억나지 않습니다{' '}
-          <Text style={styles.loginLink} onPress={() => router.push({ pathname: '/login', params: { role: role } })}>로그인</Text>
+          <Text 
+            style={styles.loginLink} 
+            onPress={() => router.push({ pathname: '/login', params: { role } })}
+          >
+            로그인
+          </Text>
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -91,4 +132,3 @@ const styles = StyleSheet.create({
   bottomText: { fontSize: 12, color: '#888', textAlign: 'center', lineHeight: 20 },
   loginLink: { color: '#2140DC', fontWeight: 'bold' },
 });
-
