@@ -10,19 +10,21 @@ import { publicRequest } from '../utils/api';
 export default function SignupScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const role = params.role as string; // 'owner' | 'worker'
+  const role = params.role as string;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState('');
 
   const isValid = email && password && passwordConfirm && name && password === passwordConfirm;
 
   const handleSignup = async () => {
     if (!isValid) return;
 
+    setEmailError('');
     setLoading(true);
     try {
       await publicRequest('/auth/signup', {
@@ -31,7 +33,7 @@ export default function SignupScreen() {
           email: email.trim(),
           password: password.trim(),
           name: name.trim(),
-          role: role === 'owner' ? 1 : 0, // 사장님: 1, 알바생: 0
+          role: role === 'owner' ? 1 : 0,
         }),
       });
 
@@ -42,7 +44,11 @@ export default function SignupScreen() {
         },
       ]);
     } catch (error: any) {
-      Alert.alert('회원가입 실패', error.message || '다시 시도해주세요.');
+      if (error.message.includes('409') || error.message.includes('이미')) {
+        setEmailError('이미 사용 중인 아이디입니다.');
+      } else {
+        Alert.alert('회원가입 실패', error.message || '다시 시도해주세요.');
+      }
     } finally {
       setLoading(false);
     }
@@ -58,14 +64,18 @@ export default function SignupScreen() {
         <Text style={styles.title}>회원가입</Text>
 
         <TextInput
-          style={styles.input}
+          style={[styles.input, emailError ? styles.inputError : null]}
           placeholder="이메일"
           placeholderTextColor="#BDBDBD"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(text) => { setEmail(text); setEmailError(''); }}
           autoCapitalize="none"
           keyboardType="email-address"
         />
+        {emailError ? (
+          <Text style={styles.errorText}>{emailError}</Text>
+        ) : null}
+
         <TextInput
           style={styles.input}
           placeholder="비밀번호"
@@ -74,6 +84,7 @@ export default function SignupScreen() {
           onChangeText={setPassword}
           secureTextEntry
         />
+
         <TextInput
           style={[styles.input, passwordConfirm && password !== passwordConfirm && styles.inputError]}
           placeholder="비밀번호 확인"
@@ -85,6 +96,7 @@ export default function SignupScreen() {
         {passwordConfirm && password !== passwordConfirm && (
           <Text style={styles.errorText}>비밀번호가 일치하지 않습니다</Text>
         )}
+
         <TextInput
           style={styles.input}
           placeholder="이름 입력"
@@ -99,21 +111,22 @@ export default function SignupScreen() {
           activeOpacity={0.8}
           onPress={handleSignup}
         >
-          {loading 
-            ? <ActivityIndicator color="#FFF" /> 
+          {loading
+            ? <ActivityIndicator color="#FFF" />
             : <Text style={styles.signupBtnText}>회원가입</Text>
           }
         </TouchableOpacity>
 
         <Text style={styles.bottomText}>
-          이미 사용 중인 아이디 / 비밀번호가 기억나지 않습니다{' '}
-          <Text 
-            style={styles.loginLink} 
+          이미 사용 중인 아이디가 있으신가요?{' '}
+          <Text
+            style={styles.linkText}
             onPress={() => router.push({ pathname: '/login', params: { role } })}
           >
             로그인
           </Text>
         </Text>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -129,6 +142,6 @@ const styles = StyleSheet.create({
   errorText: { color: '#FF3B30', fontSize: 12, marginBottom: 8, marginTop: -4 },
   signupBtn: { backgroundColor: '#2140DC', height: 52, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8, marginBottom: 24 },
   signupBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  bottomText: { fontSize: 12, color: '#888', textAlign: 'center', lineHeight: 20 },
-  loginLink: { color: '#2140DC', fontWeight: 'bold' },
+  bottomText: { fontSize: 12, color: '#888', textAlign: 'center', lineHeight: 24 },
+  linkText: { color: '#2140DC', fontWeight: 'bold' },
 });
