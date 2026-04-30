@@ -1,23 +1,52 @@
 import React, { useState } from 'react';
-import { SafeAreaView, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
+import { 
+  SafeAreaView, Text, StyleSheet, TouchableOpacity, 
+  TextInput, ScrollView, Alert, ActivityIndicator 
+} from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { publicRequest } from '../utils/api';
+import { saveAccessToken } from '../utils/tokenStorage';
 
 export default function LoginScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const role = params.role as string; // role-select에서 넘어온 role
+  const role = params.role as string;
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const isValid = email && password;
 
-  const handleLogin = () => {
-    // role에 따라 다른 화면으로 이동
-    if (role === 'owner') {
-      router.replace('/workplace-create');
-    } else {
-      router.replace('/workplace-join');
+  const handleLogin = async () => {
+    console.log('현재 role:', role);
+    if (!isValid) return;
+
+    setLoading(true);
+    try {
+      const result = await publicRequest('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: email.trim(),
+          password: password.trim(),
+        }),
+      });
+
+      // 토큰 저장
+      await saveAccessToken(result.accessToken);
+      console.log('로그인 성공, 토큰 저장 완료');
+
+      // role에 따라 다른 화면으로 이동
+      if (role === 'owner') {
+        router.replace('/workplace-create');
+      } else {
+        router.replace('/workplace-join');
+      }
+    } catch (error: any) {
+      console.log('로그인 실패:', error.message);
+      Alert.alert('로그인 실패', '이메일 또는 비밀번호를 확인해주세요.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -49,12 +78,15 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.loginBtn, !isValid && { backgroundColor: '#BDBDBD' }]}
-          disabled={!isValid}
+          style={[styles.loginBtn, (!isValid || loading) && { backgroundColor: '#BDBDBD' }]}
+          disabled={!isValid || loading}
           activeOpacity={0.8}
           onPress={handleLogin}
         >
-          <Text style={styles.loginBtnText}>로그인</Text>
+          {loading
+            ? <ActivityIndicator color="#FFF" />
+            : <Text style={styles.loginBtnText}>로그인</Text>
+          }
         </TouchableOpacity>
 
         <Text style={styles.bottomText}>아직 계정이 없으신가요?</Text>

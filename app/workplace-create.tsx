@@ -1,10 +1,42 @@
 import React, { useState } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { 
+  SafeAreaView, View, Text, StyleSheet, TouchableOpacity, 
+  TextInput, Alert, ActivityIndicator 
+} from 'react-native';
 import { useRouter } from 'expo-router';
+import { apiRequest } from '../utils/api';
 
 export default function WorkplaceCreateScreen() {
   const router = useRouter();
   const [workplaceName, setWorkplaceName] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleCreate = async () => {
+    if (!workplaceName.trim()) return;
+
+    setLoading(true);
+    try {
+      const result = await apiRequest('/workplace/create', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: workplaceName.trim(),
+        }),
+      });
+
+      console.log('사업장 생성 성공:', result);
+      Alert.alert('사업장 생성 완료', `${result.name} 사업장이 생성되었습니다.`, [
+        {
+          text: '확인',
+          onPress: () => router.replace('/(tabs)'),
+        },
+      ]);
+    } catch (error: any) {
+      console.log('사업장 생성 실패:', error.message);
+      Alert.alert('사업장 생성 실패', error.message || '다시 시도해주세요.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -20,12 +52,15 @@ export default function WorkplaceCreateScreen() {
         />
 
         <TouchableOpacity
-          style={[styles.doneBtn, !workplaceName.trim() && { backgroundColor: '#BDBDBD' }]}
-          disabled={!workplaceName.trim()}
+          style={[styles.doneBtn, (!workplaceName.trim() || loading) && { backgroundColor: '#BDBDBD' }]}
+          disabled={!workplaceName.trim() || loading}
           activeOpacity={0.8}
-          onPress={() => router.replace('/(tabs)')}
+          onPress={handleCreate}
         >
-          <Text style={styles.doneBtnText}>완료</Text>
+          {loading
+            ? <ActivityIndicator color="#FFF" />
+            : <Text style={styles.doneBtnText}>완료</Text>
+          }
         </TouchableOpacity>
       </View>
     </SafeAreaView>
