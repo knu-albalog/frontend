@@ -41,9 +41,9 @@ function TabsContent() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarStyle: {
-          height: Platform.OS === 'ios' ? 82 : 68 + insets.bottom,
-          paddingTop: 8,
-          paddingBottom: Platform.OS === 'ios' ? 18 : Math.max(insets.bottom, 8),
+          height: Platform.OS === 'ios' ? 92 : 74 + insets.bottom,
+          paddingTop: 14,
+          paddingBottom: Platform.OS === 'ios' ? 18 : Math.max(insets.bottom, 10),
           backgroundColor: '#FFFFFF',
           borderTopWidth: 1,
           borderTopColor: '#F0F0F0',

@@ -277,9 +277,10 @@ export default function HomeScreen() {
       <TouchableOpacity
         style={[
           styles.floatingButton,
-          { bottom: insets.bottom + 88 },
+          { bottom: insets.bottom  },
         ]}
         onPress={() => router.push('/chatbot')}
+        activeOpacity={0.85}
       >
         <Image source={WORKY_LOGO} style={styles.workyIcon} />
         <Text style={styles.floatingText}>워키</Text>
@@ -299,7 +300,8 @@ const styles = StyleSheet.create({
   },
 
   contentContainer: {
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 26,
   },
 
   loadingContainer: {
@@ -316,7 +318,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    alignItems: 'center',
+    marginBottom: 30,
   },
 
   headerTextGroup: {
@@ -324,21 +327,25 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
   },
 
-  greetingTitle: {
-    fontSize: 26,
-    color: '#222222',
-  },
+ greetingTitle: {
+  fontSize: 26,
+  color: '#222222',
+  fontWeight: 'bold',
+},
 
-  userNameText: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: MAIN_COLOR,
-  },
+userNameText: {
+  fontSize: 26,
+  fontWeight: 'bold',
+  color: '#222222',
+},
 
   profileCard: {
     backgroundColor: MAIN_COLOR,
-    padding: 20,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 22,
     borderRadius: 20,
+    marginBottom: 32,
   },
 
   profileAvatarGroup: {
@@ -347,10 +354,10 @@ const styles = StyleSheet.create({
   },
 
   avatarIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 10,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    marginRight: 14,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
@@ -365,13 +372,16 @@ const styles = StyleSheet.create({
 
   cardRole: {
     color: '#DDE3FF',
-    marginTop: 2,
+    marginTop: 4,
+    fontSize: 14,
   },
 
   cardDivider: {
     height: 1,
     backgroundColor: '#DDE3FF',
-    marginVertical: 10,
+    opacity: 0.5,
+    marginTop: 22,
+    marginBottom: 18,
   },
 
   profileCardBottom: {
@@ -382,19 +392,21 @@ const styles = StyleSheet.create({
   cardInfoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 16,
     marginTop: 4,
   },
 
   cardInfoText: {
     color: '#FFFFFF',
-    marginLeft: 5,
+    marginLeft: 6,
+    fontSize: 14,
   },
 
   menuContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 20,
+    marginTop: 0,
+    marginBottom: 38,
   },
 
   menuItem: {
@@ -403,44 +415,48 @@ const styles = StyleSheet.create({
   },
 
   menuIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: LIGHT_MAIN_COLOR,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   menuName: {
-    marginTop: 5,
-    fontSize: 12,
+    marginTop: 8,
+    fontSize: 13,
     color: '#555555',
   },
 
   noticeSection: {
-    marginTop: 30,
+    marginTop: 0,
   },
 
   noticeTitle: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#222222',
+    marginBottom: 12,
   },
 
   noticeCard: {
-    marginTop: 10,
+    marginTop: 0,
     borderWidth: 1,
     borderColor: '#D7DCFF',
     backgroundColor: '#FFFFFF',
-    padding: 16,
-    minHeight: 160,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    minHeight: 180,
     borderRadius: 16,
   },
 
   noticeItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF0FF',
   },
 
   noticeItemTitle: {
