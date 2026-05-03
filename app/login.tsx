@@ -1,10 +1,16 @@
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { 
-  SafeAreaView, Text, StyleSheet, TouchableOpacity, 
-  TextInput, ScrollView, Alert, ActivityIndicator 
+import {
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { publicRequest } from '../utils/api';
+import { apiRequest, publicRequest } from '../utils/api';
 import { saveAccessToken } from '../utils/tokenStorage';
 
 export default function LoginScreen() {
@@ -16,27 +22,41 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const isValid = email && password;
+  const isValid = email.trim() && password;
 
   const handleLogin = async () => {
-    console.log('현재 role:', role);
     if (!isValid) return;
 
     setLoading(true);
+
     try {
       const result = await publicRequest('/auth/login', {
         method: 'POST',
         body: JSON.stringify({
           email: email.trim(),
-          password: password.trim(),
+          password: password,
         }),
       });
 
-      // 토큰 저장
       await saveAccessToken(result.accessToken);
       console.log('로그인 성공, 토큰 저장 완료');
 
-      // role에 따라 다른 화면으로 이동
+      try {
+        const workplaceInfo = await apiRequest('/workplace/info');
+
+        if (
+          workplaceInfo?.id ||
+          workplaceInfo?.workplaceId ||
+          workplaceInfo?.name ||
+          workplaceInfo?.workplaceName
+        ) {
+          router.replace('/(tabs)');
+          return;
+        }
+      } catch (error: any) {
+        console.log('사업장 정보 없음:', error.message);
+      }
+
       if (role === 'owner') {
         router.replace('/workplace-create');
       } else {
@@ -64,6 +84,7 @@ export default function LoginScreen() {
           autoCapitalize="none"
           keyboardType="email-address"
         />
+
         <TextInput
           style={styles.input}
           placeholder="비밀번호"
@@ -83,13 +104,15 @@ export default function LoginScreen() {
           activeOpacity={0.8}
           onPress={handleLogin}
         >
-          {loading
-            ? <ActivityIndicator color="#FFF" />
-            : <Text style={styles.loginBtnText}>로그인</Text>
-          }
+          {loading ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={styles.loginBtnText}>로그인</Text>
+          )}
         </TouchableOpacity>
 
         <Text style={styles.bottomText}>아직 계정이 없으신가요?</Text>
+
         <TouchableOpacity onPress={() => router.push('/role-select')}>
           <Text style={styles.signupLink}>회원가입</Text>
         </TouchableOpacity>
@@ -100,13 +123,59 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
-  container: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 80, paddingBottom: 40 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#111', marginBottom: 32 },
-  input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, height: 52, paddingHorizontal: 16, fontSize: 15, color: '#111', marginBottom: 12 },
-  forgotBtn: { alignSelf: 'flex-end', marginBottom: 24 },
-  forgotText: { fontSize: 12, color: '#888' },
-  loginBtn: { backgroundColor: '#2140DC', height: 52, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
-  loginBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  bottomText: { fontSize: 13, color: '#888', textAlign: 'center', marginBottom: 8 },
-  signupLink: { color: '#2140DC', fontWeight: 'bold', textAlign: 'center', fontSize: 14 },
+  container: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 80,
+    paddingBottom: 40,
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#111',
+    marginBottom: 32,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    height: 52,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#111',
+    marginBottom: 12,
+  },
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: 24,
+  },
+  forgotText: {
+    fontSize: 12,
+    color: '#888',
+  },
+  loginBtn: {
+    backgroundColor: '#2140DC',
+    height: 52,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  loginBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  bottomText: {
+    fontSize: 13,
+    color: '#888',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  signupLink: {
+    color: '#2140DC',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    fontSize: 14,
+  },
 });

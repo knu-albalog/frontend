@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
-import { 
-  SafeAreaView, View, Text, StyleSheet, TouchableOpacity, 
-  TextInput, Alert, ActivityIndicator 
-} from 'react-native';
 import { useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { apiRequest } from '../utils/api';
 
 export default function WorkplaceCreateScreen() {
@@ -22,6 +28,9 @@ export default function WorkplaceCreateScreen() {
           name: workplaceName.trim(),
         }),
       });
+      await apiRequest(`/workplace/joinId?workplaceId=${result.id}`, {
+  method: 'PATCH',
+});
 
       console.log('사업장 생성 성공:', result);
       Alert.alert('사업장 생성 완료', `${result.name} 사업장이 생성되었습니다.`, [
