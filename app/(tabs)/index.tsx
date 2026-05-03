@@ -16,6 +16,9 @@ import { apiRequest } from '../../utils/api';
 
 import WORKY_LOGO from '../../assets/images/worky_logo.png';
 
+const MAIN_COLOR = '#2140DC';
+const LIGHT_MAIN_COLOR = '#EEF1FF';
+
 type UserData = {
   name: string;
   role: string;
@@ -39,7 +42,7 @@ export default function HomeScreen() {
     time: '오늘 근무 확인 필요',
   });
 
-  const [avatarColor, setAvatarColor] = useState('#2F4AFF');
+  const [avatarColor, setAvatarColor] = useState(MAIN_COLOR);
   const [noticeList, setNoticeList] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -74,6 +77,8 @@ export default function HomeScreen() {
 
       if (savedColor !== null) {
         setAvatarColor(savedColor);
+      } else {
+        setAvatarColor(MAIN_COLOR);
       }
     } catch (e) {
       console.log('색상 불러오기 실제 오류:', e);
@@ -170,7 +175,7 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2F4AFF" />
+          <ActivityIndicator size="large" color={MAIN_COLOR} />
           <Text style={styles.loadingText}>메인 화면을 불러오는 중...</Text>
         </View>
       </SafeAreaView>
@@ -187,7 +192,7 @@ export default function HomeScreen() {
           </View>
 
           <TouchableOpacity onPress={() => router.push('/notification')}>
-            <Ionicons name="notifications-outline" size={26} color="#000" />
+            <Ionicons name="notifications-outline" size={26} color={MAIN_COLOR} />
           </TouchableOpacity>
         </View>
 
@@ -211,12 +216,12 @@ export default function HomeScreen() {
 
           <View style={styles.profileCardBottom}>
             <View style={styles.cardInfoItem}>
-              <Ionicons name="business-outline" size={16} color="#fff" />
+              <Ionicons name="business-outline" size={16} color="#FFFFFF" />
               <Text style={styles.cardInfoText}>{userData.workplaceName}</Text>
             </View>
 
             <View style={styles.cardInfoItem}>
-              <Ionicons name="time-outline" size={16} color="#fff" />
+              <Ionicons name="time-outline" size={16} color="#FFFFFF" />
               <Text style={styles.cardInfoText}>{userData.time}</Text>
             </View>
           </View>
@@ -230,7 +235,7 @@ export default function HomeScreen() {
               onPress={() => router.push(item.path as any)}
             >
               <View style={styles.menuIconCircle}>
-                <Ionicons name={item.icon as any} size={28} color="#2F4AFF" />
+                <Ionicons name={item.icon as any} size={28} color={MAIN_COLOR} />
               </View>
               <Text style={styles.menuName}>{item.name}</Text>
             </TouchableOpacity>
@@ -243,9 +248,15 @@ export default function HomeScreen() {
           <View style={styles.noticeCard}>
             {noticeList.length > 0 ? (
               noticeList.map((notice) => (
-                <Text key={notice.id} style={styles.noticeItemTitle}>
-                  {notice.title}
-                </Text>
+                <View key={notice.id} style={styles.noticeItem}>
+                  <Text style={styles.noticeItemTitle}>{notice.title}</Text>
+
+                  {notice.isNew && (
+                    <View style={styles.newBadge}>
+                      <Text style={styles.newBadgeText}>NEW</Text>
+                    </View>
+                  )}
+                </View>
               ))
             ) : (
               <Text style={styles.emptyNoticeText}>등록된 공지사항이 없습니다.</Text>
@@ -266,20 +277,63 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#fff' },
-  container: { flex: 1 },
-  contentContainer: { padding: 24, paddingBottom: 120 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
 
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, color: '#888' },
+  container: {
+    flex: 1,
+  },
 
-  header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
-  headerTextGroup: { flexDirection: 'row', alignItems: 'baseline' },
-  greetingTitle: { fontSize: 26 },
-  userNameText: { fontSize: 26, fontWeight: 'bold' },
+  contentContainer: {
+    padding: 24,
+    paddingBottom: 120,
+  },
 
-  profileCard: { backgroundColor: '#2F4AFF', padding: 20, borderRadius: 20 },
-  profileAvatarGroup: { flexDirection: 'row', alignItems: 'center' },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  loadingText: {
+    marginTop: 12,
+    color: '#777777',
+  },
+
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+
+  headerTextGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+
+  greetingTitle: {
+    fontSize: 26,
+    color: '#222222',
+  },
+
+  userNameText: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: MAIN_COLOR,
+  },
+
+  profileCard: {
+    backgroundColor: MAIN_COLOR,
+    padding: 20,
+    borderRadius: 20,
+  },
+
+  profileAvatarGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
 
   avatarIcon: {
     width: 50,
@@ -288,46 +342,125 @@ const styles = StyleSheet.create({
     marginRight: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
   },
 
-  cardName: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  cardRole: { color: '#ccc' },
+  cardName: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
 
-  cardDivider: { height: 1, backgroundColor: '#fff', marginVertical: 10 },
+  cardRole: {
+    color: '#DDE3FF',
+    marginTop: 2,
+  },
 
-  profileCardBottom: { flexDirection: 'row', flexWrap: 'wrap' },
-  cardInfoItem: { flexDirection: 'row', alignItems: 'center', marginRight: 10 },
-  cardInfoText: { color: '#fff', marginLeft: 5 },
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#DDE3FF',
+    marginVertical: 10,
+  },
 
-  menuContainer: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 },
-  menuItem: { alignItems: 'center', width: '22%' },
+  profileCardBottom: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+
+  cardInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 10,
+    marginTop: 4,
+  },
+
+  cardInfoText: {
+    color: '#FFFFFF',
+    marginLeft: 5,
+  },
+
+  menuContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+
+  menuItem: {
+    alignItems: 'center',
+    width: '22%',
+  },
+
   menuIconCircle: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#F0F2FF',
+    backgroundColor: LIGHT_MAIN_COLOR,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  menuName: { marginTop: 5, fontSize: 12, color: '#999' },
 
-  noticeSection: { marginTop: 30 },
-  noticeTitle: { fontSize: 18, fontWeight: 'bold' },
+  menuName: {
+    marginTop: 5,
+    fontSize: 12,
+    color: '#555555',
+  },
+
+  noticeSection: {
+    marginTop: 30,
+  },
+
+  noticeTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222222',
+  },
+
   noticeCard: {
     marginTop: 10,
     borderWidth: 1,
-    borderColor: '#333',
+    borderColor: '#D7DCFF',
+    backgroundColor: '#FFFFFF',
     padding: 16,
     minHeight: 160,
+    borderRadius: 16,
   },
-  noticeItemTitle: { fontSize: 14, color: '#333', marginBottom: 10 },
-  emptyNoticeText: { color: '#999' },
+
+  noticeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  noticeItemTitle: {
+    flex: 1,
+    fontSize: 14,
+    color: '#333333',
+  },
+
+  newBadge: {
+    backgroundColor: MAIN_COLOR,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+
+  newBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+
+  emptyNoticeText: {
+    color: '#999999',
+  },
 
   floatingButton: {
     position: 'absolute',
     bottom: 28,
     right: 24,
-    backgroundColor: '#2F4AFF',
+    backgroundColor: MAIN_COLOR,
     width: 70,
     height: 70,
     borderRadius: 35,
@@ -339,9 +472,12 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-  backgroundColor: 'transparent',
-
+    backgroundColor: 'transparent',
   },
 
-  floatingText: { color: '#fff', fontSize: 10, marginTop: 2 },
+  floatingText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    marginTop: 2,
+  },
 });

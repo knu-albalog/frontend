@@ -1,6 +1,6 @@
-import React from 'react';
-import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
+import React from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
 type TabItemProps = {
@@ -17,7 +17,7 @@ function TabBarItem({ focused, icon, activeIcon, label }: TabItemProps) {
         <Ionicons
           name={focused ? activeIcon : icon}
           size={22}
-          color={focused ? '#2F4AFF' : '#A0A0A0'}
+          color={focused ? '#2140DC' : '#A0A0A0'}
         />
       </View>
       <Text style={[styles.tabLabel, focused && styles.tabLabelFocused]}>
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   tabLabelFocused: {
-    color: '#2F4AFF',
+    color: '#2140DC',
     fontWeight: '700',
   },
 });

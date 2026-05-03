@@ -19,9 +19,13 @@ import {
 import { apiRequest } from '../../utils/api';
 import { deleteAccessToken } from '../../utils/tokenStorage';
 
+const MAIN_COLOR = '#2140DC';
+const MAIN_LIGHT_COLOR = '#EEF1FF';
+const MAIN_SOFT_COLOR = '#AEBBFF';
+
 type RoleType = '사장님' | '파트타이머';
 
-const avatarColors = ['#2F4AFF', '#FF8A00', '#27AE60', '#9B51E0', '#EB5757'];
+const avatarColors = [MAIN_COLOR, '#FF8A00', '#27AE60', '#9B51E0', '#EB5757'];
 
 export default function MyPageScreen() {
   const router = useRouter();
@@ -29,7 +33,7 @@ export default function MyPageScreen() {
   const [nickname, setNickname] = useState('사용자');
   const [role, setRole] = useState<RoleType>('파트타이머');
   const [email, setEmail] = useState('');
-  const [avatarColor, setAvatarColor] = useState('#2F4AFF');
+  const [avatarColor, setAvatarColor] = useState(MAIN_COLOR);
 
   const [loading, setLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -37,34 +41,46 @@ export default function MyPageScreen() {
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
 
   const [tempNickname, setTempNickname] = useState('');
-  const [tempAvatarColor, setTempAvatarColor] = useState('#2F4AFF');
+  const [tempAvatarColor, setTempAvatarColor] = useState(MAIN_COLOR);
 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const getRoleText = (value: any): RoleType => {
-  console.log('🔥 role 값 확인:', value);
+    console.log('role 값 확인:', value);
 
-  if (
-    value === 1 ||
-    value === true ||
-    value === '1' ||
-    value === 'OWNER' ||
-    value === 'owner' ||
-    value === 'ADMIN' ||
-    value === 'admin' ||
-    value === 'BOSS' ||
-    value === 'boss' ||
-    value === '사장님'
-  ) {
-    return '사장님';
-  }
+    if (
+      value === 1 ||
+      value === true ||
+      value === '1' ||
+      value === 'OWNER' ||
+      value === 'owner' ||
+      value === 'ADMIN' ||
+      value === 'admin' ||
+      value === 'BOSS' ||
+      value === 'boss' ||
+      value === '사장님'
+    ) {
+      return '사장님';
+    }
 
-  return '파트타이머';
-};
+    return '파트타이머';
+  };
 
   const getProfileIconName = () => {
     return role === '사장님' ? 'briefcase-outline' : 'happy-outline';
+  };
+
+  const loadSavedAvatarColor = async () => {
+    try {
+      const savedColor = await AsyncStorage.getItem('avatarColor');
+
+      if (savedColor) {
+        setAvatarColor(savedColor);
+      }
+    } catch (error) {
+      console.log('프로필 색상 불러오기 실패:', error);
+    }
   };
 
   const loadProfile = async () => {
@@ -78,15 +94,17 @@ export default function MyPageScreen() {
       setRole(
         getRoleText(
           result?.role ??
-          result?.userRole ??
-          result?.authority ??
-          result?.isAdmin ??
-          result?.admin
+            result?.userRole ??
+            result?.authority ??
+            result?.isAdmin ??
+            result?.admin
         )
       );
 
       if (result?.avatarColor) {
         setAvatarColor(result.avatarColor);
+      } else {
+        await loadSavedAvatarColor();
       }
     } catch (error: any) {
       console.log('프로필 조회 실패:', error.message);
@@ -114,10 +132,11 @@ export default function MyPageScreen() {
 
     try {
       await AsyncStorage.setItem('avatarColor', tempAvatarColor);
-      
+
       setNickname(tempNickname.trim());
       setAvatarColor(tempAvatarColor);
       setEditModalVisible(false);
+
       Alert.alert('완료', '프로필이 수정되었습니다.');
     } catch (error: any) {
       console.log('프로필 수정 실패:', error.message);
@@ -147,6 +166,7 @@ export default function MyPageScreen() {
       setNewPassword('');
       setConfirmPassword('');
       setPasswordModalVisible(false);
+
       Alert.alert('완료', '비밀번호가 변경되었습니다.');
     } catch (error: any) {
       console.log('비밀번호 변경 실패:', error.message);
@@ -187,7 +207,7 @@ export default function MyPageScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#2F4AFF" />
+          <ActivityIndicator size="large" color={MAIN_COLOR} />
           <Text style={styles.loadingText}>프로필을 불러오는 중...</Text>
         </View>
       </SafeAreaView>
@@ -236,8 +256,9 @@ export default function MyPageScreen() {
           >
             <View style={styles.menuLeft}>
               <View style={styles.iconCircle}>
-                <Ionicons name="person-outline" size={18} color="#7B8CFF" />
+                <Ionicons name="person-outline" size={18} color={MAIN_COLOR} />
               </View>
+
               <View>
                 <Text style={styles.menuTitle}>나의 정보</Text>
                 <Text style={styles.menuDescription}>
@@ -245,6 +266,7 @@ export default function MyPageScreen() {
                 </Text>
               </View>
             </View>
+
             <Ionicons name="chevron-forward" size={20} color="#B7B7B7" />
           </TouchableOpacity>
 
@@ -257,8 +279,9 @@ export default function MyPageScreen() {
           >
             <View style={styles.menuLeft}>
               <View style={styles.iconCircle}>
-                <Ionicons name="shield-checkmark-outline" size={18} color="#7B8CFF" />
+                <Ionicons name="shield-checkmark-outline" size={18} color={MAIN_COLOR} />
               </View>
+
               <View>
                 <Text style={styles.menuTitle}>비밀번호 변경</Text>
                 <Text style={styles.menuDescription}>
@@ -266,6 +289,7 @@ export default function MyPageScreen() {
                 </Text>
               </View>
             </View>
+
             <Ionicons name="chevron-forward" size={20} color="#B7B7B7" />
           </TouchableOpacity>
 
@@ -274,13 +298,15 @@ export default function MyPageScreen() {
           <TouchableOpacity style={styles.menuRow} activeOpacity={0.8} onPress={handleLogout}>
             <View style={styles.menuLeft}>
               <View style={styles.iconCircle}>
-                <Ionicons name="log-out-outline" size={18} color="#7B8CFF" />
+                <Ionicons name="log-out-outline" size={18} color={MAIN_COLOR} />
               </View>
+
               <View>
                 <Text style={styles.menuTitle}>로그아웃</Text>
                 <Text style={styles.menuDescription}>현재 계정에서 로그아웃합니다</Text>
               </View>
             </View>
+
             <Ionicons name="chevron-forward" size={20} color="#B7B7B7" />
           </TouchableOpacity>
         </View>
@@ -303,12 +329,14 @@ export default function MyPageScreen() {
               <View style={[styles.avatarPreview, { backgroundColor: tempAvatarColor }]}>
                 <Ionicons name={getProfileIconName() as any} size={34} color="#FFFFFF" />
               </View>
+
               <Text style={styles.avatarHelpText}>
                 {role === '사장님' ? '사장님 픽토그램' : '알바생 픽토그램'}
               </Text>
             </View>
 
             <Text style={styles.inputLabel}>프로필 색상</Text>
+
             <View style={styles.colorRow}>
               {avatarColors.map((color) => (
                 <TouchableOpacity
@@ -325,6 +353,7 @@ export default function MyPageScreen() {
             </View>
 
             <Text style={styles.inputLabel}>닉네임</Text>
+
             <TextInput
               style={styles.input}
               placeholder="닉네임을 입력하세요"
@@ -364,11 +393,13 @@ export default function MyPageScreen() {
             <Text style={styles.modalTitle}>나의 정보</Text>
 
             <Text style={styles.infoLabel}>이메일</Text>
+
             <View style={styles.readonlyBox}>
               <Text style={styles.readonlyText}>{email || '이메일 정보 없음'}</Text>
             </View>
 
             <Text style={[styles.infoLabel, { marginTop: 18 }]}>역할</Text>
+
             <View style={styles.readonlyBox}>
               <Text style={styles.readonlyText}>{role}</Text>
             </View>
@@ -404,6 +435,7 @@ export default function MyPageScreen() {
             <Text style={styles.modalTitle}>비밀번호 변경</Text>
 
             <Text style={styles.inputLabel}>새 비밀번호</Text>
+
             <TextInput
               style={styles.input}
               placeholder="새 비밀번호를 입력하세요"
@@ -414,6 +446,7 @@ export default function MyPageScreen() {
             />
 
             <Text style={styles.inputLabel}>새 비밀번호 확인</Text>
+
             <TextInput
               style={styles.input}
               placeholder="새 비밀번호를 다시 입력하세요"
@@ -444,12 +477,33 @@ export default function MyPageScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  contentContainer: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 40 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
 
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, fontSize: 14, color: '#888' },
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+
+  contentContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 40,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#888888',
+  },
 
   pageTitle: {
     fontSize: 24,
@@ -458,14 +512,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
   },
+
   sectionLabel: {
     fontSize: 15,
     fontWeight: '700',
     color: '#C7C7C7',
     marginBottom: 12,
   },
+
   profileCard: {
-    backgroundColor: '#2F4AFF',
+    backgroundColor: MAIN_COLOR,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 16,
@@ -473,13 +529,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 18,
-    shadowColor: '#1D2F9C',
+    shadowColor: MAIN_COLOR,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 12,
     elevation: 6,
   },
-  profileLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+
+  profileLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+
   avatarIcon: {
     width: 48,
     height: 48,
@@ -487,9 +549,23 @@ const styles = StyleSheet.create({
     marginRight: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
   },
-  profileName: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 },
-  profileRole: { fontSize: 12, color: '#C9D3FF', fontWeight: '500' },
+
+  profileName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+
+  profileRole: {
+    fontSize: 12,
+    color: '#DDE3FF',
+    fontWeight: '500',
+  },
+
   editButton: {
     width: 34,
     height: 34,
@@ -505,6 +581,7 @@ const styles = StyleSheet.create({
     borderColor: '#EEF0F5',
     overflow: 'hidden',
   },
+
   menuRow: {
     minHeight: 82,
     paddingHorizontal: 16,
@@ -513,19 +590,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  menuLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 },
+
+  menuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 12,
+  },
+
   iconCircle: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#F4F6FF',
+    backgroundColor: MAIN_LIGHT_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
-  menuTitle: { fontSize: 15, fontWeight: '700', color: '#242424', marginBottom: 4 },
-  menuDescription: { fontSize: 11, color: '#B8B8B8', lineHeight: 16 },
-  divider: { height: 1, backgroundColor: '#F1F2F6', marginLeft: 62 },
+
+  menuTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#242424',
+    marginBottom: 4,
+  },
+
+  menuDescription: {
+    fontSize: 11,
+    color: '#B8B8B8',
+    lineHeight: 16,
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F2F6',
+    marginLeft: 62,
+  },
 
   modalOverlay: {
     flex: 1,
@@ -533,10 +633,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 20,
   },
-  modalCard: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 20 },
-  modalTitle: { fontSize: 20, fontWeight: '700', color: '#111111', marginBottom: 18 },
 
-  avatarPreviewRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18 },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+  },
+
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111111',
+    marginBottom: 18,
+  },
+
+  avatarPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+
   avatarPreview: {
     width: 62,
     height: 62,
@@ -545,9 +661,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  avatarHelpText: { fontSize: 13, fontWeight: '600', color: '#555' },
 
-  colorRow: { flexDirection: 'row', marginBottom: 12 },
+  avatarHelpText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#555555',
+  },
+
+  colorRow: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+
   colorCircle: {
     width: 34,
     height: 34,
@@ -556,7 +681,10 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  colorCircleSelected: { borderColor: '#111111' },
+
+  colorCircleSelected: {
+    borderColor: '#111111',
+  },
 
   inputLabel: {
     fontSize: 13,
@@ -565,6 +693,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 8,
   },
+
   input: {
     height: 48,
     borderWidth: 1,
@@ -575,7 +704,14 @@ const styles = StyleSheet.create({
     color: '#111111',
     backgroundColor: '#FAFBFF',
   },
-  modalButtonRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 24, gap: 10 },
+
+  modalButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    gap: 10,
+  },
+
   cancelButton: {
     flex: 1,
     height: 48,
@@ -584,18 +720,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   confirmButton: {
     flex: 1,
     height: 48,
     borderRadius: 12,
-    backgroundColor: '#2F4AFF',
+    backgroundColor: MAIN_COLOR,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cancelButtonText: { fontSize: 15, fontWeight: '700', color: '#555555' },
-  confirmButtonText: { fontSize: 15, fontWeight: '700', color: '#FFFFFF' },
 
-  infoLabel: { fontSize: 13, fontWeight: '600', color: '#555555', marginBottom: 8 },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#555555',
+  },
+
+  confirmButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  infoLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#555555',
+    marginBottom: 8,
+  },
+
   readonlyBox: {
     height: 48,
     borderRadius: 12,
@@ -605,7 +758,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 14,
   },
-  readonlyText: { fontSize: 14, color: '#333333' },
+
+  readonlyText: {
+    fontSize: 14,
+    color: '#333333',
+  },
 
   withdrawButton: {
     marginTop: 16,
@@ -614,5 +771,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#FFF2F2',
   },
-  withdrawText: { fontSize: 14, fontWeight: '700', color: '#E24A4A' },
+
+  withdrawText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#E24A4A',
+  },
 });
