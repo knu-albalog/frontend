@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,12 +15,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../utils/api';
 import { deleteAccessToken } from '../../utils/tokenStorage';
 
 const MAIN_COLOR = '#2140DC';
 const MAIN_LIGHT_COLOR = '#EEF1FF';
-const MAIN_SOFT_COLOR = '#AEBBFF';
 
 type RoleType = '사장님' | '파트타이머';
 
@@ -29,6 +28,7 @@ const avatarColors = [MAIN_COLOR, '#FF8A00', '#27AE60', '#9B51E0', '#EB5757'];
 
 export default function MyPageScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [nickname, setNickname] = useState('사용자');
   const [role, setRole] = useState<RoleType>('파트타이머');
@@ -205,7 +205,7 @@ export default function MyPageScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={MAIN_COLOR} />
           <Text style={styles.loadingText}>프로필을 불러오는 중...</Text>
@@ -215,10 +215,13 @@ export default function MyPageScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingBottom: insets.bottom + 120 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.pageTitle}>마이페이지</Text>
@@ -319,7 +322,10 @@ export default function MyPageScreen() {
         onRequestClose={() => setEditModalVisible(false)}
       >
         <KeyboardAvoidingView
-          style={styles.modalOverlay}
+          style={[
+            styles.modalOverlay,
+            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
+          ]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.modalCard}>
@@ -386,7 +392,10 @@ export default function MyPageScreen() {
         onRequestClose={() => setInfoModalVisible(false)}
       >
         <KeyboardAvoidingView
-          style={styles.modalOverlay}
+          style={[
+            styles.modalOverlay,
+            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
+          ]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.modalCard}>
@@ -428,7 +437,10 @@ export default function MyPageScreen() {
         onRequestClose={() => setPasswordModalVisible(false)}
       >
         <KeyboardAvoidingView
-          style={styles.modalOverlay}
+          style={[
+            styles.modalOverlay,
+            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
+          ]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.modalCard}>
@@ -490,7 +502,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 20,
     paddingTop: 18,
-    paddingBottom: 40,
   },
 
   loadingContainer: {

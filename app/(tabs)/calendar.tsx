@@ -1,16 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
-  TextInput,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ShiftItem = {
   id: number;
@@ -43,6 +43,7 @@ function getWeekStart(date: Date) {
 
 function getWeekDates(baseDate: Date) {
   const start = getWeekStart(baseDate);
+
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
@@ -88,6 +89,8 @@ function normalizeTime(value: string) {
 }
 
 export default function CalendarScreen() {
+  const insets = useSafeAreaInsets();
+
   const initialSelectedDate = new Date(2026, 3, 11);
 
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
@@ -179,6 +182,7 @@ export default function CalendarScreen() {
 
   const handleChangeShiftStart = (id: number, value: string) => {
     const formatted = formatTimeInput(value);
+
     setShifts((prev) =>
       prev.map((item) => (item.id === id ? { ...item, start: formatted } : item))
     );
@@ -186,6 +190,7 @@ export default function CalendarScreen() {
 
   const handleChangeShiftEnd = (id: number, value: string) => {
     const formatted = formatTimeInput(value);
+
     setShifts((prev) =>
       prev.map((item) => (item.id === id ? { ...item, end: formatted } : item))
     );
@@ -195,6 +200,7 @@ export default function CalendarScreen() {
     setShifts((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
+
         const normalized = normalizeTime(item.start);
         return { ...item, start: normalized };
       })
@@ -205,6 +211,7 @@ export default function CalendarScreen() {
     setShifts((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
+
         const normalized = normalizeTime(item.end);
         return { ...item, end: normalized };
       })
@@ -245,11 +252,14 @@ export default function CalendarScreen() {
   const months = Array.from({ length: 12 }, (_, i) => i);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={[
+            styles.contentContainer,
+            { paddingBottom: insets.bottom + 150 },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.screenTitle}>캘린더</Text>
@@ -443,6 +453,7 @@ export default function CalendarScreen() {
               >
                 {years.map((year) => {
                   const selected = tempYear === year;
+
                   return (
                     <TouchableOpacity
                       key={year}
@@ -463,9 +474,11 @@ export default function CalendarScreen() {
               </ScrollView>
 
               <Text style={styles.modalSectionLabel}>월</Text>
+
               <View style={styles.monthGrid}>
                 {months.map((month) => {
                   const selected = tempMonth === month;
+
                   return (
                     <TouchableOpacity
                       key={month}
@@ -523,7 +536,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 24,
     paddingTop: 18,
-    paddingBottom: 140,
   },
 
   screenTitle: {

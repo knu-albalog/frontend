@@ -5,13 +5,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest } from '../../utils/api';
 
 import WORKY_LOGO from '../../assets/images/worky_logo.png';
@@ -34,6 +34,7 @@ type Notice = {
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const [userData, setUserData] = useState<UserData>({
     name: '사용자',
@@ -68,6 +69,7 @@ export default function HomeScreen() {
     ) {
       return '사장님';
     }
+
     return '파트타이머';
   };
 
@@ -173,7 +175,7 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={MAIN_COLOR} />
           <Text style={styles.loadingText}>메인 화면을 불러오는 중...</Text>
@@ -183,8 +185,15 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingBottom: insets.bottom + 150 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <View style={styles.headerTextGroup}>
             <Text style={styles.greetingTitle}>Hi </Text>
@@ -266,7 +275,10 @@ export default function HomeScreen() {
       </ScrollView>
 
       <TouchableOpacity
-        style={styles.floatingButton}
+        style={[
+          styles.floatingButton,
+          { bottom: insets.bottom + 88 },
+        ]}
         onPress={() => router.push('/chatbot')}
       >
         <Image source={WORKY_LOGO} style={styles.workyIcon} />
@@ -288,7 +300,6 @@ const styles = StyleSheet.create({
 
   contentContainer: {
     padding: 24,
-    paddingBottom: 120,
   },
 
   loadingContainer: {
@@ -458,7 +469,6 @@ const styles = StyleSheet.create({
 
   floatingButton: {
     position: 'absolute',
-    bottom: 28,
     right: 24,
     backgroundColor: MAIN_COLOR,
     width: 70,
