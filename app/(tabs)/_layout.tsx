@@ -37,6 +37,7 @@ function TabsContent() {
 
   return (
     <Tabs
+      initialRouteName="index"
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
@@ -50,21 +51,6 @@ function TabsContent() {
         },
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: '홈',
-          tabBarIcon: ({ focused }) => (
-            <TabBarItem
-              focused={focused}
-              icon="home-outline"
-              activeIcon="home"
-              label="홈"
-            />
-          ),
-        }}
-      />
-
       <Tabs.Screen
         name="calendar"
         options={{
@@ -81,15 +67,15 @@ function TabsContent() {
       />
 
       <Tabs.Screen
-        name="request"
+        name="index"
         options={{
-          title: '요구사항',
+          title: '홈',
           tabBarIcon: ({ focused }) => (
             <TabBarItem
               focused={focused}
-              icon="chatbubbles-outline"
-              activeIcon="chatbubbles"
-              label="요구사항"
+              icon="home-outline"
+              activeIcon="home"
+              label="홈"
             />
           ),
         }}
@@ -107,6 +93,13 @@ function TabsContent() {
               label="마이"
             />
           ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="request"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

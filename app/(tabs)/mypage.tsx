@@ -26,6 +26,55 @@ type RoleType = '사장님' | '파트타이머';
 
 const avatarColors = [MAIN_COLOR, '#FF8A00', '#27AE60', '#9B51E0', '#EB5757'];
 
+type PasswordInputProps = {
+  label: string;
+  placeholder: string;
+  value: string;
+  visible: boolean;
+  onChangeText: (text: string) => void;
+  onToggleVisible: () => void;
+};
+
+function PasswordInput({
+  label,
+  placeholder,
+  value,
+  visible,
+  onChangeText,
+  onToggleVisible,
+}: PasswordInputProps) {
+  return (
+    <>
+      <Text style={styles.inputLabel}>{label}</Text>
+
+      <View style={styles.passwordInputWrap}>
+        <TextInput
+          style={styles.passwordInput}
+          placeholder={placeholder}
+          placeholderTextColor="#A9A9A9"
+          secureTextEntry={!visible}
+          value={value}
+          onChangeText={onChangeText}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <TouchableOpacity
+          style={styles.eyeButton}
+          onPress={onToggleVisible}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={visible ? 'eye-outline' : 'eye-off-outline'}
+            size={22}
+            color="#8A8A8A"
+          />
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+}
+
 export default function MyPageScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -43,8 +92,13 @@ export default function MyPageScreen() {
   const [tempNickname, setTempNickname] = useState('');
   const [tempAvatarColor, setTempAvatarColor] = useState(MAIN_COLOR);
 
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [currentPasswordVisible, setCurrentPasswordVisible] = useState(false);
+  const [newPasswordVisible, setNewPasswordVisible] = useState(false);
+  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
 
   const getRoleText = (value: any): RoleType => {
     console.log('role 값 확인:', value);
@@ -124,6 +178,30 @@ export default function MyPageScreen() {
     setEditModalVisible(true);
   };
 
+  const openPasswordModal = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+
+    setCurrentPasswordVisible(false);
+    setNewPasswordVisible(false);
+    setConfirmPasswordVisible(false);
+
+    setPasswordModalVisible(true);
+  };
+
+  const closePasswordModal = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+
+    setCurrentPasswordVisible(false);
+    setNewPasswordVisible(false);
+    setConfirmPasswordVisible(false);
+
+    setPasswordModalVisible(false);
+  };
+
   const saveProfile = async () => {
     if (!tempNickname.trim()) {
       Alert.alert('알림', '닉네임을 입력해주세요.');
@@ -145,13 +223,23 @@ export default function MyPageScreen() {
   };
 
   const changePassword = async () => {
+    if (!currentPassword.trim()) {
+      Alert.alert('알림', '현재 비밀번호를 입력해주세요.');
+      return;
+    }
+
     if (!newPassword.trim() || !confirmPassword.trim()) {
-      Alert.alert('알림', '비밀번호를 모두 입력해주세요.');
+      Alert.alert('알림', '새 비밀번호를 모두 입력해주세요.');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert('알림', '비밀번호가 일치하지 않습니다.');
+      Alert.alert('알림', '새 비밀번호가 일치하지 않습니다.');
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      Alert.alert('알림', '현재 비밀번호와 다른 새 비밀번호를 입력해주세요.');
       return;
     }
 
@@ -159,18 +247,20 @@ export default function MyPageScreen() {
       await apiRequest('/user/password', {
         method: 'PATCH',
         body: JSON.stringify({
-          password: newPassword,
+          currentPassword: currentPassword,
+          newPassword: newPassword,
         }),
       });
 
-      setNewPassword('');
-      setConfirmPassword('');
-      setPasswordModalVisible(false);
+      closePasswordModal();
 
       Alert.alert('완료', '비밀번호가 변경되었습니다.');
     } catch (error: any) {
       console.log('비밀번호 변경 실패:', error.message);
-      Alert.alert('변경 실패', error.message || '다시 시도해주세요.');
+      Alert.alert(
+        '변경 실패',
+        error.message || '현재 비밀번호가 맞는지 다시 확인해주세요.'
+      );
     }
   };
 
@@ -278,7 +368,7 @@ export default function MyPageScreen() {
           <TouchableOpacity
             style={styles.menuRow}
             activeOpacity={0.8}
-            onPress={() => setPasswordModalVisible(true)}
+            onPress={openPasswordModal}
           >
             <View style={styles.menuLeft}>
               <View style={styles.iconCircle}>
@@ -288,7 +378,7 @@ export default function MyPageScreen() {
               <View>
                 <Text style={styles.menuTitle}>비밀번호 변경</Text>
                 <Text style={styles.menuDescription}>
-                  비밀번호 변경 및 변경 확인을 진행합니다
+                  현재 비밀번호 확인 후 새 비밀번호로 변경합니다
                 </Text>
               </View>
             </View>
@@ -434,7 +524,7 @@ export default function MyPageScreen() {
         visible={passwordModalVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setPasswordModalVisible(false)}
+        onRequestClose={closePasswordModal}
       >
         <KeyboardAvoidingView
           style={[
@@ -446,32 +536,37 @@ export default function MyPageScreen() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>비밀번호 변경</Text>
 
-            <Text style={styles.inputLabel}>새 비밀번호</Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="새 비밀번호를 입력하세요"
-              placeholderTextColor="#A9A9A9"
-              secureTextEntry
-              value={newPassword}
-              onChangeText={setNewPassword}
+            <PasswordInput
+              label="현재 비밀번호"
+              placeholder="현재 비밀번호를 입력하세요"
+              value={currentPassword}
+              visible={currentPasswordVisible}
+              onChangeText={setCurrentPassword}
+              onToggleVisible={() => setCurrentPasswordVisible(!currentPasswordVisible)}
             />
 
-            <Text style={styles.inputLabel}>새 비밀번호 확인</Text>
+            <PasswordInput
+              label="새 비밀번호"
+              placeholder="새 비밀번호를 입력하세요"
+              value={newPassword}
+              visible={newPasswordVisible}
+              onChangeText={setNewPassword}
+              onToggleVisible={() => setNewPasswordVisible(!newPasswordVisible)}
+            />
 
-            <TextInput
-              style={styles.input}
+            <PasswordInput
+              label="새 비밀번호 확인"
               placeholder="새 비밀번호를 다시 입력하세요"
-              placeholderTextColor="#A9A9A9"
-              secureTextEntry
               value={confirmPassword}
+              visible={confirmPasswordVisible}
               onChangeText={setConfirmPassword}
+              onToggleVisible={() => setConfirmPasswordVisible(!confirmPasswordVisible)}
             />
 
             <View style={styles.modalButtonRow}>
               <TouchableOpacity
                 style={styles.cancelButton}
-                onPress={() => setPasswordModalVisible(false)}
+                onPress={closePasswordModal}
                 activeOpacity={0.8}
               >
                 <Text style={styles.cancelButtonText}>취소</Text>
@@ -714,6 +809,33 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#111111',
     backgroundColor: '#FAFBFF',
+  },
+
+  passwordInputWrap: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#E4E7EE',
+    borderRadius: 12,
+    backgroundColor: '#FAFBFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 14,
+    paddingRight: 8,
+  },
+
+  passwordInput: {
+    flex: 1,
+    height: 48,
+    fontSize: 14,
+    color: '#111111',
+    paddingRight: 8,
+  },
+
+  eyeButton: {
+    width: 40,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   modalButtonRow: {
