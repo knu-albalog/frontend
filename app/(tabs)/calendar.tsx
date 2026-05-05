@@ -1,24 +1,27 @@
-import React, { useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  TextInput,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { apiRequest } from '../../utils/api';
 
 type ShiftItem = {
-  id: number;
+  id: string;
   start: string;
   end: string;
   date: Date;
 };
 
+const MAIN_COLOR = '#2140DC';
 const WEEKDAY_KR = ['일', '월', '화', '수', '목', '금', '토'];
 
 function formatMonthLabel(date: Date) {
@@ -33,6 +36,30 @@ function isSameDay(a: Date, b: Date) {
   );
 }
 
+function getDateOnly(date: Date) {
+  const copy = new Date(date);
+  copy.setHours(0, 0, 0, 0);
+  return copy;
+}
+
+function isPastDate(date: Date) {
+  return getDateOnly(date).getTime() < getDateOnly(new Date()).getTime();
+}
+
+function isTodayDate(date: Date) {
+  return isSameDay(date, new Date());
+}
+
+function isFutureDate(date: Date) {
+  return getDateOnly(date).getTime() > getDateOnly(new Date()).getTime();
+}
+
+function getShiftSortPriority(date: Date) {
+  if (isTodayDate(date)) return 0;
+  if (isFutureDate(date)) return 1;
+  return 2;
+}
+
 function getWeekStart(date: Date) {
   const copy = new Date(date);
   const day = copy.getDay();
@@ -41,8 +68,17 @@ function getWeekStart(date: Date) {
   return copy;
 }
 
+function getWeekEnd(date: Date) {
+  const start = getWeekStart(date);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
+
 function getWeekDates(baseDate: Date) {
   const start = getWeekStart(baseDate);
+
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
@@ -54,113 +90,257 @@ function formatCardDate(date: Date) {
   return `${date.getMonth() + 1}월 ${date.getDate()}일`;
 }
 
-function formatTimeInput(value: string) {
-  const numbersOnly = value.replace(/\D/g, '').slice(0, 4);
+function formatDateForApi(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
 
-  if (numbersOnly.length <= 2) {
-    return numbersOnly;
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateValue(value: any) {
+  if (!value) return new Date();
+
+  if (value instanceof Date) {
+    return value;
   }
 
-  return `${numbersOnly.slice(0, 2)}:${numbersOnly.slice(2)}`;
+  if (Array.isArray(value) && value.length >= 3) {
+    return new Date(Number(value[0]), Number(value[1]) - 1, Number(value[2]));
+  }
+
+  if (typeof value === 'string') {
+    const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+    if (dateOnlyMatch) {
+      return new Date(
+        Number(dateOnlyMatch[1]),
+        Number(dateOnlyMatch[2]) - 1,
+        Number(dateOnlyMatch[3])
+      );
+    }
+
+    const parsed = new Date(value);
+
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  return new Date();
 }
 
-function isValidTime(value: string) {
-  const match = value.match(/^(\d{2}):(\d{2})$/);
-  if (!match) return false;
+function parseTimeValue(value: any, fallback = '00:00') {
+  if (!value) return fallback;
 
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
+  if (Array.isArray(value) && value.length >= 2) {
+    return `${String(value[0]).padStart(2, '0')}:${String(value[1]).padStart(2, '0')}`;
+  }
 
-  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+  if (typeof value === 'string') {
+    const timeMatch = value.match(/(\d{2}):(\d{2})/);
+
+    if (timeMatch) {
+      return `${timeMatch[1]}:${timeMatch[2]}`;
+    }
+  }
+
+  return fallback;
 }
 
-function normalizeTime(value: string) {
-  const digits = value.replace(/\D/g, '');
+function extractScheduleArray(result: any): any[] {
+  const source = Array.isArray(result)
+    ? result
+    : result?.schedules ??
+      result?.scheduleList ??
+      result?.scheduleResponses ??
+      result?.content ??
+      result?.data ??
+      result?.items ??
+      [];
 
-  if (digits.length !== 4) return value;
+  if (!Array.isArray(source)) {
+    return [];
+  }
 
-  const hour = Number(digits.slice(0, 2));
-  const minute = Number(digits.slice(2, 4));
+  return source.flatMap((item: any) => {
+    const nested =
+      item?.schedules ??
+      item?.scheduleList ??
+      item?.scheduleResponses ??
+      item?.items ??
+      item?.workSchedules;
 
-  if (hour > 23 || minute > 59) return value;
+    if (Array.isArray(nested)) {
+      return nested.map((nestedItem: any) => ({
+        ...nestedItem,
+        date:
+          nestedItem?.date ??
+          nestedItem?.workDate ??
+          nestedItem?.scheduleDate ??
+          item?.date ??
+          item?.workDate ??
+          item?.scheduleDate,
+      }));
+    }
 
-  return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+    return [item];
+  });
+}
+
+function normalizeScheduleItem(item: any, index: number): ShiftItem {
+  const dateValue =
+    item?.workDate ??
+    item?.date ??
+    item?.scheduleDate ??
+    item?.workDay ??
+    item?.startDate ??
+    item?.startDateTime ??
+    item?.startAt;
+
+  const startValue =
+    item?.startTime ??
+    item?.start ??
+    item?.workStartTime ??
+    item?.scheduleStartTime ??
+    item?.startDateTime ??
+    item?.startAt;
+
+  const endValue =
+    item?.endTime ??
+    item?.end ??
+    item?.workEndTime ??
+    item?.scheduleEndTime ??
+    item?.endDateTime ??
+    item?.endAt;
+
+  return {
+    id: String(item?.id ?? item?.scheduleId ?? item?.workScheduleId ?? index + 1),
+    start: parseTimeValue(startValue, '00:00'),
+    end: parseTimeValue(endValue, '00:00'),
+    date: parseDateValue(dateValue),
+  };
 }
 
 export default function CalendarScreen() {
-  const initialSelectedDate = new Date(2026, 3, 11);
+  const insets = useSafeAreaInsets();
+
+  const initialSelectedDate = new Date();
 
   const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
   const [currentWeekBase, setCurrentWeekBase] = useState(initialSelectedDate);
   const [pickerVisible, setPickerVisible] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(true);
 
   const [tempYear, setTempYear] = useState(initialSelectedDate.getFullYear());
   const [tempMonth, setTempMonth] = useState(initialSelectedDate.getMonth());
 
-  const [shifts, setShifts] = useState<ShiftItem[]>([
-    {
-      id: 1,
-      start: '09:00',
-      end: '12:00',
-      date: new Date(2026, 3, 11),
-    },
-    {
-      id: 2,
-      start: '09:00',
-      end: '12:00',
-      date: new Date(2026, 3, 9),
-    },
-    {
-      id: 3,
-      start: '09:00',
-      end: '12:00',
-      date: new Date(2026, 3, 14),
-    },
-    {
-      id: 4,
-      start: '09:00',
-      end: '12:00',
-      date: new Date(2026, 3, 15),
-    },
-    {
-      id: 5,
-      start: '13:00',
-      end: '18:00',
-      date: new Date(2026, 3, 16),
-    },
-  ]);
+  const [shifts, setShifts] = useState<ShiftItem[]>([]);
 
   const weekDates = useMemo(() => getWeekDates(currentWeekBase), [currentWeekBase]);
 
   const weeklyShifts = useMemo(() => {
     return shifts
       .filter((item) => weekDates.some((d) => isSameDay(d, item.date)))
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
+      .sort((a, b) => {
+        const priorityDiff = getShiftSortPriority(a.date) - getShiftSortPriority(b.date);
+
+        if (priorityDiff !== 0) {
+          return priorityDiff;
+        }
+
+        const aPriority = getShiftSortPriority(a.date);
+
+        if (aPriority === 2) {
+          const dateDiff = b.date.getTime() - a.date.getTime();
+
+          if (dateDiff !== 0) {
+            return dateDiff;
+          }
+
+          return a.start.localeCompare(b.start);
+        }
+
+        const dateDiff = a.date.getTime() - b.date.getTime();
+
+        if (dateDiff !== 0) {
+          return dateDiff;
+        }
+
+        return a.start.localeCompare(b.start);
+      });
   }, [shifts, weekDates]);
+
+  const loadWeekSchedules = useCallback(async (baseDate: Date) => {
+    setScheduleLoading(true);
+
+    const targetWeekDates = getWeekDates(baseDate);
+    const weekStart = getWeekStart(baseDate);
+    const weekEnd = getWeekEnd(baseDate);
+
+    const baseDateText = formatDateForApi(baseDate);
+    const startDateText = formatDateForApi(weekStart);
+    const endDateText = formatDateForApi(weekEnd);
+
+    const endpoints = [
+      `/schedule/week?date=${baseDateText}`,
+      `/schedule/week?startDate=${startDateText}&endDate=${endDateText}`,
+      `/schedule/week?start=${startDateText}&end=${endDateText}`,
+      `/schedule/period?startDate=${startDateText}&endDate=${endDateText}`,
+      `/schedule/period?start=${startDateText}&end=${endDateText}`,
+    ];
+
+    let lastError: any = null;
+
+    for (const endpoint of endpoints) {
+      try {
+        const result = await apiRequest(endpoint);
+        const scheduleArray = extractScheduleArray(result);
+
+        const normalizedSchedules = scheduleArray
+          .map((item, index) => normalizeScheduleItem(item, index))
+          .filter((item) => targetWeekDates.some((date) => isSameDay(date, item.date)));
+
+        setShifts(normalizedSchedules);
+        setScheduleLoading(false);
+        return;
+      } catch (error: any) {
+        lastError = error;
+      }
+    }
+
+    console.log('주간 스케줄 조회 실패:', lastError?.message);
+    setShifts([]);
+    setScheduleLoading(false);
+    Alert.alert('오류', '주간 근무 일정을 불러오지 못했습니다.');
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadWeekSchedules(currentWeekBase);
+    }, [currentWeekBase, loadWeekSchedules])
+  );
 
   const handlePrevWeek = () => {
     const newDate = new Date(currentWeekBase);
     newDate.setDate(newDate.getDate() - 7);
+
     setCurrentWeekBase(newDate);
 
     if (!getWeekDates(newDate).some((d) => isSameDay(d, selectedDate))) {
       setSelectedDate(getWeekDates(newDate)[0]);
     }
-
-    setIsEditing(false);
   };
 
   const handleNextWeek = () => {
     const newDate = new Date(currentWeekBase);
     newDate.setDate(newDate.getDate() + 7);
+
     setCurrentWeekBase(newDate);
 
     if (!getWeekDates(newDate).some((d) => isSameDay(d, selectedDate))) {
       setSelectedDate(getWeekDates(newDate)[0]);
     }
-
-    setIsEditing(false);
   };
 
   const openMonthPicker = () => {
@@ -171,85 +351,25 @@ export default function CalendarScreen() {
 
   const applyMonthPicker = () => {
     const newDate = new Date(tempYear, tempMonth, 1);
+
     setCurrentWeekBase(newDate);
     setSelectedDate(newDate);
     setPickerVisible(false);
-    setIsEditing(false);
   };
 
-  const handleChangeShiftStart = (id: number, value: string) => {
-    const formatted = formatTimeInput(value);
-    setShifts((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, start: formatted } : item))
-    );
-  };
-
-  const handleChangeShiftEnd = (id: number, value: string) => {
-    const formatted = formatTimeInput(value);
-    setShifts((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, end: formatted } : item))
-    );
-  };
-
-  const handleBlurShiftStart = (id: number) => {
-    setShifts((prev) =>
-      prev.map((item) => {
-        if (item.id !== id) return item;
-        const normalized = normalizeTime(item.start);
-        return { ...item, start: normalized };
-      })
-    );
-  };
-
-  const handleBlurShiftEnd = (id: number) => {
-    setShifts((prev) =>
-      prev.map((item) => {
-        if (item.id !== id) return item;
-        const normalized = normalizeTime(item.end);
-        return { ...item, end: normalized };
-      })
-    );
-  };
-
-  const handlePressEdit = () => {
-    setIsEditing(true);
-  };
-
-  const handleDeleteShift = (id: number) => {
-    Alert.alert('근무 삭제', '이 근무를 삭제할까요?', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '삭제',
-        style: 'destructive',
-        onPress: () => {
-          setShifts((prev) => prev.filter((item) => item.id !== id));
-        },
-      },
-    ]);
-  };
-
-  const handleCompleteEdit = () => {
-    const invalidShift = weeklyShifts.find(
-      (item) => !isValidTime(item.start) || !isValidTime(item.end)
-    );
-
-    if (invalidShift) {
-      Alert.alert('시간 형식 확인', '시간은 09:00 형식으로 입력해주세요.');
-      return;
-    }
-
-    setIsEditing(false);
-  };
-
-  const years = Array.from({ length: 11 }, (_, i) => 2022 + i);
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
   const months = Array.from({ length: 12 }, (_, i) => i);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={[
+            styles.contentContainer,
+            { paddingBottom: insets.bottom + 150 },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.screenTitle}>캘린더</Text>
@@ -265,12 +385,13 @@ export default function CalendarScreen() {
 
           <View style={styles.weekRowWrapper}>
             <TouchableOpacity style={styles.arrowButton} onPress={handlePrevWeek}>
-              <Ionicons name="chevron-back" size={20} color="#2B50E6" />
+              <Ionicons name="chevron-back" size={20} color={MAIN_COLOR} />
             </TouchableOpacity>
 
             <View style={styles.weekRow}>
               {weekDates.map((date) => {
                 const active = isSameDay(date, selectedDate);
+                const hasShift = shifts.some((shift) => isSameDay(shift.date, date));
 
                 return (
                   <TouchableOpacity
@@ -282,128 +403,85 @@ export default function CalendarScreen() {
                     <Text style={[styles.dayNumber, active && styles.dayNumberActive]}>
                       {date.getDate()}
                     </Text>
+
                     <Text style={[styles.dayLabel, active && styles.dayLabelActive]}>
                       {WEEKDAY_KR[date.getDay()]}
                     </Text>
+
+                    {hasShift && (
+                      <View style={[styles.shiftDot, active && styles.shiftDotActive]} />
+                    )}
                   </TouchableOpacity>
                 );
               })}
             </View>
 
             <TouchableOpacity style={styles.arrowButton} onPress={handleNextWeek}>
-              <Ionicons name="chevron-forward" size={20} color="#2B50E6" />
+              <Ionicons name="chevron-forward" size={20} color={MAIN_COLOR} />
             </TouchableOpacity>
           </View>
 
           <View style={styles.sectionHeaderRow}>
             <Text style={styles.sectionTitle}>나의 근무</Text>
-
-            <View style={styles.headerRightRow}>
-              <TouchableOpacity
-                style={[styles.editButton, isEditing && styles.editingButton]}
-                activeOpacity={0.85}
-                onPress={handlePressEdit}
-                disabled={isEditing}
-              >
-                <Ionicons
-                  name={isEditing ? 'build-outline' : 'create-outline'}
-                  size={12}
-                  color={isEditing ? '#2B50E6' : '#8E8E8E'}
-                />
-                <Text
-                  style={[
-                    styles.editButtonText,
-                    isEditing && styles.editingButtonText,
-                  ]}
-                >
-                  {isEditing ? '수정 중' : '편집'}
-                </Text>
-              </TouchableOpacity>
-            </View>
           </View>
 
           <View style={styles.cardList}>
-            {weeklyShifts.length > 0 ? (
+            {scheduleLoading ? (
+              <View style={styles.loadingBox}>
+                <ActivityIndicator size="small" color={MAIN_COLOR} />
+                <Text style={styles.loadingBoxText}>근무 일정을 불러오는 중...</Text>
+              </View>
+            ) : weeklyShifts.length > 0 ? (
               weeklyShifts.map((item) => {
-                const active = isSameDay(item.date, selectedDate);
-                const startInvalid = item.start.length > 0 && !isValidTime(item.start);
-                const endInvalid = item.end.length > 0 && !isValidTime(item.end);
+                const todayShift = isTodayDate(item.date);
+                const pastShift = isPastDate(item.date);
 
                 return (
                   <TouchableOpacity
                     key={item.id}
-                    style={[styles.shiftCard, active && styles.shiftCardActive]}
-                    activeOpacity={isEditing ? 1 : 0.9}
-                    onPress={() => {
-                      if (!isEditing) {
-                        setSelectedDate(item.date);
-                      }
-                    }}
+                    style={[
+                      styles.shiftCard,
+                      todayShift && styles.shiftCardToday,
+                      pastShift && styles.shiftCardPast,
+                    ]}
+                    activeOpacity={0.9}
+                    onPress={() => setSelectedDate(item.date)}
                   >
                     <View style={styles.shiftTopRow}>
                       <View style={styles.shiftTitleRow}>
                         <Ionicons
                           name="calendar-outline"
                           size={14}
-                          color={active ? '#2F2F2F' : '#3C3C3C'}
+                          color={todayShift ? '#FFFFFF' : '#202020'}
                         />
-                        <Text style={styles.shiftDateText}>{formatCardDate(item.date)}</Text>
+
+                        <Text
+                          style={[
+                            styles.shiftDateText,
+                            todayShift && styles.todayText,
+                            pastShift && styles.pastText,
+                          ]}
+                        >
+                          {formatCardDate(item.date)}
+                        </Text>
                       </View>
 
-                      {isEditing && (
-                        <TouchableOpacity
-                          style={styles.deleteButton}
-                          activeOpacity={0.8}
-                          onPress={() => handleDeleteShift(item.id)}
-                        >
-                          <Ionicons name="trash-outline" size={16} color="#FF4D4F" />
-                        </TouchableOpacity>
+                      {todayShift && (
+                        <View style={styles.todayBadge}>
+                          <Text style={styles.todayBadgeText}>TODAY</Text>
+                        </View>
                       )}
                     </View>
 
-                    {isEditing ? (
-                      <View style={styles.editFormArea}>
-                        <Text style={styles.inputLabel}>시작 시간</Text>
-                        <TextInput
-                          value={item.start}
-                          onChangeText={(text) => handleChangeShiftStart(item.id, text)}
-                          onBlur={() => handleBlurShiftStart(item.id)}
-                          placeholder="09:00"
-                          style={[
-                            styles.editInput,
-                            startInvalid && styles.editInputError,
-                          ]}
-                          placeholderTextColor="#A0A0A0"
-                          keyboardType="number-pad"
-                          maxLength={5}
-                        />
-
-                        <Text style={styles.inputLabel}>종료 시간</Text>
-                        <TextInput
-                          value={item.end}
-                          onChangeText={(text) => handleChangeShiftEnd(item.id, text)}
-                          onBlur={() => handleBlurShiftEnd(item.id)}
-                          placeholder="12:00"
-                          style={[
-                            styles.editInput,
-                            endInvalid && styles.editInputError,
-                          ]}
-                          placeholderTextColor="#A0A0A0"
-                          keyboardType="number-pad"
-                          maxLength={5}
-                        />
-
-                        {(startInvalid || endInvalid) && (
-                          <Text style={styles.errorText}>
-                            시간은 09:00 형식으로 입력해주세요.
-                          </Text>
-                        )}
-                      </View>
-                    ) : (
-                      <Text style={styles.shiftTimeText}>
-                        {item.start} ~ {item.end}
-                      </Text>
-                    )}
+                    <Text
+                      style={[
+                        styles.shiftTimeText,
+                        todayShift && styles.todayText,
+                        pastShift && styles.pastText,
+                      ]}
+                    >
+                      {item.start} ~ {item.end}
+                    </Text>
                   </TouchableOpacity>
                 );
               })
@@ -413,16 +491,6 @@ export default function CalendarScreen() {
               </View>
             )}
           </View>
-
-          {isEditing && weeklyShifts.length > 0 && (
-            <TouchableOpacity
-              style={styles.completeButton}
-              activeOpacity={0.9}
-              onPress={handleCompleteEdit}
-            >
-              <Text style={styles.completeButtonText}>수정 완료</Text>
-            </TouchableOpacity>
-          )}
         </ScrollView>
 
         <Modal
@@ -436,6 +504,7 @@ export default function CalendarScreen() {
               <Text style={styles.modalTitle}>년 / 월 선택</Text>
 
               <Text style={styles.modalSectionLabel}>년도</Text>
+
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -443,6 +512,7 @@ export default function CalendarScreen() {
               >
                 {years.map((year) => {
                   const selected = tempYear === year;
+
                   return (
                     <TouchableOpacity
                       key={year}
@@ -463,9 +533,11 @@ export default function CalendarScreen() {
               </ScrollView>
 
               <Text style={styles.modalSectionLabel}>월</Text>
+
               <View style={styles.monthGrid}>
                 {months.map((month) => {
                   const selected = tempMonth === month;
+
                   return (
                     <TouchableOpacity
                       key={month}
@@ -523,7 +595,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: 24,
     paddingTop: 18,
-    paddingBottom: 140,
   },
 
   screenTitle: {
@@ -572,7 +643,7 @@ const styles = StyleSheet.create({
 
   dayChip: {
     width: 36,
-    height: 54,
+    height: 58,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: '#D7D7D7',
@@ -582,8 +653,8 @@ const styles = StyleSheet.create({
   },
 
   dayChipActive: {
-    backgroundColor: '#2B50E6',
-    borderColor: '#2B50E6',
+    backgroundColor: MAIN_COLOR,
+    borderColor: MAIN_COLOR,
   },
 
   dayNumber: {
@@ -607,6 +678,18 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
+  shiftDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: MAIN_COLOR,
+    marginTop: 4,
+  },
+
+  shiftDotActive: {
+    backgroundColor: '#FFFFFF',
+  },
+
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -620,41 +703,23 @@ const styles = StyleSheet.create({
     color: '#151515',
   },
 
-  headerRightRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FAFAFA',
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-
-  editingButton: {
-    backgroundColor: '#EEF3FF',
-    borderColor: '#C9D6FF',
-  },
-
-  editButtonText: {
-    marginLeft: 4,
-    fontSize: 11,
-    color: '#8A8A8A',
-    fontWeight: '500',
-  },
-
-  editingButtonText: {
-    color: '#2B50E6',
-    fontWeight: '700',
-  },
-
   cardList: {
     marginTop: 2,
+  },
+
+  loadingBox: {
+    marginTop: 8,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 18,
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  loadingBoxText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#8A8A8A',
   },
 
   shiftCard: {
@@ -665,8 +730,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  shiftCardActive: {
-    backgroundColor: '#ECEFFF',
+  shiftCardToday: {
+    backgroundColor: MAIN_COLOR,
+  },
+
+  shiftCardPast: {
+    backgroundColor: '#E2E2E2',
   },
 
   shiftTopRow: {
@@ -679,6 +748,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
+    flex: 1,
   },
 
   shiftDateText: {
@@ -688,53 +758,32 @@ const styles = StyleSheet.create({
     color: '#262626',
   },
 
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFF4F4',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
   shiftTimeText: {
     fontSize: 14,
     color: '#767676',
     fontWeight: '500',
   },
 
-  editFormArea: {
-    marginTop: 6,
+  todayText: {
+    color: '#FFFFFF',
   },
 
-  inputLabel: {
-    fontSize: 12,
-    color: '#666666',
+  pastText: {
+    color: '#777777',
+    textDecorationLine: 'line-through',
+  },
+
+  todayBadge: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+
+  todayBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
     fontWeight: '700',
-    marginBottom: 6,
-    marginTop: 8,
-  },
-
-  editInput: {
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DADDE5',
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: '#1F1F1F',
-  },
-
-  editInputError: {
-    borderColor: '#FF6B6B',
-  },
-
-  errorText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#FF4D4F',
-    fontWeight: '500',
   },
 
   emptyBox: {
@@ -748,22 +797,6 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 14,
     color: '#8A8A8A',
-  },
-
-  completeButton: {
-    marginTop: 16,
-    marginBottom: 8,
-    backgroundColor: '#2B50E6',
-    borderRadius: 16,
-    height: 54,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  completeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
   },
 
   modalOverlay: {
@@ -808,7 +841,7 @@ const styles = StyleSheet.create({
   },
 
   pickerChipActive: {
-    backgroundColor: '#2B50E6',
+    backgroundColor: MAIN_COLOR,
   },
 
   pickerChipText: {
@@ -839,7 +872,7 @@ const styles = StyleSheet.create({
   },
 
   monthCellActive: {
-    backgroundColor: '#2B50E6',
+    backgroundColor: MAIN_COLOR,
   },
 
   monthCellText: {
@@ -871,7 +904,7 @@ const styles = StyleSheet.create({
   },
 
   confirmButton: {
-    backgroundColor: '#2B50E6',
+    backgroundColor: MAIN_COLOR,
     borderRadius: 12,
     paddingHorizontal: 18,
     paddingVertical: 12,

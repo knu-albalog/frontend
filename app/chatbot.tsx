@@ -1,18 +1,18 @@
-import React, { useState, useRef, useEffect } from 'react';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
   Image,
-  TextInput,
-  TouchableOpacity,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 
 const WORKY_LOGO = require('../assets/images/worky_logo.png');
 
@@ -164,7 +164,7 @@ export default function ChatbotScreen() {
                       >
                         {message.type === 'numbered_list'
                           ? `${index + 1}. ${item}` // 1. 포스 마감...
-                          : `• ${item}`} {/* • 매장 바닥... */}
+                          : `• ${item}`};
                       </Text>
                     ))}
                   </View>

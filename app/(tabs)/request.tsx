@@ -1,14 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useMemo, useState } from 'react';
 import {
-  SafeAreaView,
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
-  TextInput,
   FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type FilterType = 'All' | '사장' | '파트타이머';
 
@@ -21,6 +21,8 @@ type RequestItem = {
 };
 
 export default function RequestScreen() {
+  const insets = useSafeAreaInsets();
+
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('All');
   const [searchText, setSearchText] = useState('');
 
@@ -82,6 +84,7 @@ export default function RequestScreen() {
       if (a.confirmed === b.confirmed) {
         return a.id - b.id;
       }
+
       return a.confirmed ? 1 : -1;
     });
   }, [selectedFilter, searchText, requestList]);
@@ -110,6 +113,7 @@ export default function RequestScreen() {
               {item.senderType}{' '}
               <Text style={styles.nickText}>{item.senderName}</Text>
             </Text>
+
             <Text style={styles.requestContent} numberOfLines={1}>
               {item.content}
             </Text>
@@ -166,7 +170,7 @@ export default function RequestScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.container}>
         <Text style={styles.title}>요구사항</Text>
 
@@ -193,7 +197,10 @@ export default function RequestScreen() {
           data={filteredRequests}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderRequestItem}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: insets.bottom + 110 },
+          ]}
           showsVerticalScrollIndicator={false}
         />
       </View>
@@ -206,12 +213,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
+
   container: {
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 10,
     backgroundColor: '#FFFFFF',
   },
+
   title: {
     fontSize: 26,
     fontWeight: '700',
@@ -228,6 +237,7 @@ const styles = StyleSheet.create({
     padding: 4,
     marginBottom: 12,
   },
+
   filterButton: {
     flex: 1,
     height: 32,
@@ -235,14 +245,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+
   activeFilterButton: {
     backgroundColor: '#2140DC',
   },
+
   filterButtonText: {
     fontSize: 14,
     fontWeight: '600',
     color: '#222222',
   },
+
   activeFilterButtonText: {
     color: '#FFFFFF',
   },
@@ -256,6 +269,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     marginBottom: 16,
   },
+
   searchInput: {
     flex: 1,
     marginLeft: 6,
@@ -263,7 +277,6 @@ const styles = StyleSheet.create({
     color: '#222222',
     paddingVertical: 0,
     borderWidth: 0,
-  
   },
 
   listContent: {
@@ -298,9 +311,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
+
   activeIconCircle: {
     backgroundColor: '#F1F5FF',
   },
+
   inactiveIconCircle: {
     backgroundColor: '#F0F0F0',
   },
@@ -308,16 +323,19 @@ const styles = StyleSheet.create({
   requestTextWrap: {
     flex: 1,
   },
+
   senderText: {
     fontSize: 14,
     fontWeight: '700',
     color: '#111111',
     marginBottom: 4,
   },
+
   nickText: {
     fontWeight: '600',
     color: '#333333',
   },
+
   requestContent: {
     fontSize: 12,
     color: '#999999',
@@ -331,17 +349,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 14,
   },
+
   activeConfirmButton: {
     backgroundColor: '#2140DC',
   },
+
   confirmedButton: {
     backgroundColor: '#D3D3D3',
   },
+
   confirmButtonText: {
     fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
   },
+
   confirmedButtonText: {
     color: '#FFFFFF',
   },

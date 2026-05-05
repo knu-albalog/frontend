@@ -1,28 +1,52 @@
-import React from 'react';
-import {
-  Image,
-  StyleSheet,
-  View,
-  ScrollView,
-  Text,
-  SafeAreaView,
-  TouchableOpacity,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { apiRequest } from '../../utils/api';
+
+import WORKY_LOGO from '../../assets/images/worky_logo.png';
+
+const MAIN_COLOR = '#2140DC';
+const LIGHT_MAIN_COLOR = '#EEF1FF';
+
+type UserData = {
+  name: string;
+  role: string;
+  workplaceName: string;
+  time: string;
+};
+
+type Notice = {
+  id: number;
+  title: string;
+  isNew: boolean;
+};
 
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
-  // 사용자 데이터
-  const userData = {
-    name: '워클리',
+  const [userData, setUserData] = useState<UserData>({
+    name: '사용자',
     role: '파트타이머',
-    date: '4월 12일 목요일',
-    time: '11:00 - 12:00',
-  };
+    workplaceName: '사업장 정보 없음',
+    time: '오늘 근무 확인 필요',
+  });
 
-  // 중앙 메뉴 데이터 (🔥 게시판 → notice로 수정)
+  const [avatarColor, setAvatarColor] = useState(MAIN_COLOR);
+  const [noticeList, setNoticeList] = useState<Notice[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const menuItems = [
     { id: 1, name: '게시판', icon: 'create-outline', path: '/board' },
     { id: 2, name: '투두리스트', icon: 'checkbox-outline', path: '/todolist' },
@@ -30,21 +54,146 @@ export default function HomeScreen() {
     { id: 4, name: '스케줄표', icon: 'calendar-outline', path: '/schedule' },
   ];
 
-  // 공지사항 데이터
-  const noticeList = [
-    { id: 1, title: "공지사항에는 '게시글'이 최신 순서로 오게 함", isNew: true },
-    { id: 2, title: '4월 전체 알바생 회식 일정 안내', isNew: false },
-    { id: 3, title: '포스기 마감 정산 방법 변경의 건', isNew: false },
-    { id: 4, title: '여름 시즌 신메뉴 레시피 교육 자료', isNew: false },
-  ];
+  const getRoleText = (role: any) => {
+    if (
+      role === 1 ||
+      role === true ||
+      role === '1' ||
+      role === 'OWNER' ||
+      role === 'owner' ||
+      role === 'ADMIN' ||
+      role === 'admin' ||
+      role === 'BOSS' ||
+      role === 'boss' ||
+      role === '사장님'
+    ) {
+      return '사장님';
+    }
+
+    return '파트타이머';
+  };
+
+  const loadAvatarColor = async () => {
+    try {
+      const savedColor = await AsyncStorage.getItem('avatarColor');
+
+      if (savedColor !== null) {
+        setAvatarColor(savedColor);
+      } else {
+        setAvatarColor(MAIN_COLOR);
+      }
+    } catch (e) {
+      console.log('색상 불러오기 실제 오류:', e);
+    }
+  };
+
+  const loadHomeData = async () => {
+    setLoading(true);
+
+    try {
+      const profileResult = await apiRequest('/user/profile');
+
+      setUserData((prev) => ({
+        ...prev,
+        name: profileResult?.name ?? profileResult?.nickname ?? '사용자',
+        role: getRoleText(
+          profileResult?.role ??
+            profileResult?.userRole ??
+            profileResult?.authority ??
+            profileResult?.isAdmin ??
+            profileResult?.admin
+        ),
+      }));
+    } catch (error: any) {
+      console.log('프로필 조회 실패:', error.message);
+    }
+
+    try {
+      const workplaceResult = await apiRequest('/workplace/info');
+
+      setUserData((prev) => ({
+        ...prev,
+        workplaceName:
+          workplaceResult?.name ??
+          workplaceResult?.workplaceName ??
+          '사업장 정보 없음',
+      }));
+    } catch (error: any) {
+      console.log('사업장 정보 조회 실패:', error.message);
+    }
+
+    try {
+      const boardsResult = await apiRequest('/boards/my');
+
+      const boardsArray = Array.isArray(boardsResult)
+        ? boardsResult
+        : boardsResult?.boards ?? boardsResult?.content ?? [];
+
+      if (boardsArray.length === 0) {
+        setNoticeList([]);
+        return;
+      }
+
+      const firstBoardId = boardsArray[0].id ?? boardsArray[0].boardId;
+
+      if (!firstBoardId) {
+        setNoticeList([]);
+        return;
+      }
+
+      const postsResult = await apiRequest(`/boards/${firstBoardId}/posts`);
+
+      const postsArray = Array.isArray(postsResult)
+        ? postsResult
+        : postsResult?.posts ?? postsResult?.content ?? [];
+
+      setNoticeList(
+        postsArray.slice(0, 4).map((post: any, index: number) => ({
+          id: post.id ?? post.postId ?? index,
+          title: post.title ?? '제목 없음',
+          isNew: index === 0,
+        }))
+      );
+    } catch (error: any) {
+      console.log('게시판 또는 게시글 조회 실패:', error.message);
+      setNoticeList([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAvatarColor();
+    loadHomeData();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadAvatarColor();
+    }, [])
+  );
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={MAIN_COLOR} />
+          <Text style={styles.loadingText}>메인 화면을 불러오는 중...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingBottom: insets.bottom + 150 },
+        ]}
+        showsVerticalScrollIndicator={false}
       >
-        {/* 상단 헤더 */}
         <View style={styles.header}>
           <View style={styles.headerTextGroup}>
             <Text style={styles.greetingTitle}>Hi </Text>
@@ -52,26 +201,23 @@ export default function HomeScreen() {
           </View>
 
           <TouchableOpacity onPress={() => router.push('/notification')}>
-            <Ionicons name="notifications-outline" size={26} color="#000" />
+            <Ionicons name="notifications-outline" size={26} color={MAIN_COLOR} />
           </TouchableOpacity>
         </View>
 
-        {/* 프로필 카드 */}
         <View style={styles.profileCard}>
-          <View style={styles.profileCardTop}>
-            <View style={styles.profileAvatarGroup}>
-              <Image
-                source={{
-                  uri: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=200',
-                }}
-                style={styles.avatar}
+          <View style={styles.profileAvatarGroup}>
+            <View style={[styles.avatarIcon, { backgroundColor: avatarColor }]}>
+              <Ionicons
+                name={userData.role === '사장님' ? 'briefcase-outline' : 'happy-outline'}
+                size={28}
+                color="#FFFFFF"
               />
+            </View>
 
-              {/* 🔥 여기 오류였던 부분 */}
-              <View style={styles.nameRoleGroup}>
-                <Text style={styles.cardName}>{userData.name}</Text>
-                <Text style={styles.cardRole}>{userData.role}</Text>
-              </View>
+            <View>
+              <Text style={styles.cardName}>{userData.name}</Text>
+              <Text style={styles.cardRole}>{userData.role}</Text>
             </View>
           </View>
 
@@ -79,87 +225,64 @@ export default function HomeScreen() {
 
           <View style={styles.profileCardBottom}>
             <View style={styles.cardInfoItem}>
-              <Ionicons
-                name="calendar-clear-outline"
-                size={16}
-                color="#fff"
-                style={{ marginRight: 6 }}
-              />
-              <Text style={styles.cardInfoText}>{userData.date}</Text>
+              <Ionicons name="business-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.cardInfoText}>{userData.workplaceName}</Text>
             </View>
 
             <View style={styles.cardInfoItem}>
-              <Ionicons
-                name="time-outline"
-                size={16}
-                color="#fff"
-                style={{ marginRight: 6 }}
-              />
+              <Ionicons name="time-outline" size={16} color="#FFFFFF" />
               <Text style={styles.cardInfoText}>{userData.time}</Text>
             </View>
           </View>
         </View>
 
-        {/* 중앙 메뉴 */}
         <View style={styles.menuContainer}>
           {menuItems.map((item) => (
             <TouchableOpacity
               key={item.id}
               style={styles.menuItem}
-              onPress={() => {
-                if (item.path) {
-                  router.push(item.path as any);
-                }
-              }}
+              onPress={() => router.push(item.path as any)}
             >
               <View style={styles.menuIconCircle}>
-                <Ionicons
-                  name={item.icon as any}
-                  size={28}
-                  color="#2F4AFF"
-                />
+                <Ionicons name={item.icon as any} size={28} color={MAIN_COLOR} />
               </View>
               <Text style={styles.menuName}>{item.name}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* 공지사항 */}
         <View style={styles.noticeSection}>
-          <View style={styles.noticeHeader}>
-            <Text style={styles.noticeTitle}>공지사항</Text>
-          </View>
+          <Text style={styles.noticeTitle}>공지사항</Text>
 
           <View style={styles.noticeCard}>
-            {noticeList.map((notice, index) => (
-              <TouchableOpacity
-                key={notice.id}
-                style={[
-                  styles.noticeListItem,
-                  index !== noticeList.length - 1 &&
-                    styles.noticeListBorder,
-                ]}
-                onPress={() => router.push('/comment')}
-              >
-                <Text style={styles.noticeItemTitle} numberOfLines={1}>
-                  {notice.title}
-                </Text>
-                {notice.isNew && (
-                  <Text style={styles.newTag}>new</Text>
-                )}
-              </TouchableOpacity>
-            ))}
+            {noticeList.length > 0 ? (
+              noticeList.map((notice) => (
+                <View key={notice.id} style={styles.noticeItem}>
+                  <Text style={styles.noticeItemTitle}>{notice.title}</Text>
+
+                  {notice.isNew && (
+                    <View style={styles.newBadge}>
+                      <Text style={styles.newBadgeText}>NEW</Text>
+                    </View>
+                  )}
+                </View>
+              ))
+            ) : (
+              <Text style={styles.emptyNoticeText}>등록된 공지사항이 없습니다.</Text>
+            )}
           </View>
         </View>
       </ScrollView>
 
-      {/* 플로팅 버튼 */}
       <TouchableOpacity
-        style={styles.floatingButton}
-        activeOpacity={0.8}
+        style={[
+          styles.floatingButton,
+          { bottom: insets.bottom  },
+        ]}
         onPress={() => router.push('/chatbot')}
+        activeOpacity={0.85}
       >
-        <Ionicons name="calendar" size={24} color="#fff" />
+        <Image source={WORKY_LOGO} style={styles.workyIcon} />
         <Text style={styles.floatingText}>워키</Text>
       </TouchableOpacity>
     </SafeAreaView>
@@ -167,12 +290,29 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#fff' },
-  container: { flex: 1 },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+
+  container: {
+    flex: 1,
+  },
+
   contentContainer: {
-    padding: 24,
-    paddingTop: 20,
-    paddingBottom: 120,
+    paddingHorizontal: 24,
+    paddingTop: 26,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  loadingText: {
+    marginTop: 12,
+    color: '#777777',
   },
 
   header: {
@@ -181,136 +321,189 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 30,
   },
-  headerTextGroup: { flexDirection: 'row', alignItems: 'baseline' },
-  greetingTitle: { fontSize: 26, color: '#000' },
-  userNameText: { fontSize: 26, fontWeight: 'bold', color: '#000' },
+
+  headerTextGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+
+ greetingTitle: {
+  fontSize: 26,
+  color: '#222222',
+  fontWeight: 'bold',
+},
+
+userNameText: {
+  fontSize: 26,
+  fontWeight: 'bold',
+  color: '#222222',
+},
 
   profileCard: {
-    backgroundColor: '#2F4AFF',
+    backgroundColor: MAIN_COLOR,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 22,
     borderRadius: 20,
-    padding: 20,
-    marginBottom: 35,
+    marginBottom: 32,
   },
-  profileCardTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
+
   profileAvatarGroup: {
     flexDirection: 'row',
     alignItems: 'center',
   },
 
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 15,
-    backgroundColor: '#eee',
-  },
-
-  // 🔥 추가된 스타일
-  nameRoleGroup: {
+  avatarIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    marginRight: 14,
+    alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
   },
 
   cardName: {
+    color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 2,
   },
-  cardRole: { fontSize: 14, color: '#BDC7FF' },
+
+  cardRole: {
+    color: '#DDE3FF',
+    marginTop: 4,
+    fontSize: 14,
+  },
 
   cardDivider: {
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    marginVertical: 18,
+    backgroundColor: '#DDE3FF',
+    opacity: 0.5,
+    marginTop: 22,
+    marginBottom: 18,
   },
 
-  profileCardBottom: { flexDirection: 'row' },
+  profileCardBottom: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+
   cardInfoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 25,
+    marginRight: 16,
+    marginTop: 4,
   },
-  cardInfoText: { fontSize: 14, color: '#fff' },
+
+  cardInfoText: {
+    color: '#FFFFFF',
+    marginLeft: 6,
+    fontSize: 14,
+  },
 
   menuContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 40,
-  },
-  menuItem: { alignItems: 'center', width: '22%' },
-  menuIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#F0F2FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  menuName: {
-    fontSize: 12,
-    color: '#999',
-    fontWeight: '500',
+    marginTop: 0,
+    marginBottom: 38,
   },
 
-  noticeSection: { marginTop: 10 },
-  noticeHeader: { marginBottom: 15 },
+  menuItem: {
+    alignItems: 'center',
+    width: '22%',
+  },
+
+  menuIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: LIGHT_MAIN_COLOR,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  menuName: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#555555',
+  },
+
+  noticeSection: {
+    marginTop: 0,
+  },
+
   noticeTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#222222',
+    marginBottom: 12,
   },
 
   noticeCard: {
+    marginTop: 0,
     borderWidth: 1,
-    borderColor: '#333',
-    borderRadius: 2,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    minHeight: 200,
+    borderColor: '#D7DCFF',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    minHeight: 180,
+    borderRadius: 16,
   },
 
-  noticeListItem: {
+  noticeItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-  },
-  noticeListBorder: {
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: '#EEF0FF',
   },
+
   noticeItemTitle: {
-    fontSize: 14,
-    color: '#333',
     flex: 1,
-    marginRight: 8,
+    fontSize: 14,
+    color: '#333333',
   },
-  newTag: {
-    color: 'red',
+
+  newBadge: {
+    backgroundColor: MAIN_COLOR,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    marginLeft: 8,
+  },
+
+  newBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
     fontWeight: 'bold',
-    fontSize: 12,
+  },
+
+  emptyNoticeText: {
+    color: '#999999',
   },
 
   floatingButton: {
     position: 'absolute',
-    bottom: 28,
     right: 24,
-    backgroundColor: '#2F4AFF',
-    width: 65,
-    height: 65,
-    borderRadius: 32.5,
+    backgroundColor: MAIN_COLOR,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
   },
+
+  workyIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: 'transparent',
+  },
+
   floatingText: {
-    color: '#fff',
+    color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: 'bold',
     marginTop: 2,
   },
 });
