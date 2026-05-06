@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   SafeAreaView, View, Text, StyleSheet, TouchableOpacity, 
-  TextInput, ScrollView, Modal, Keyboard, Pressable 
+  TextInput, ScrollView, Modal, Keyboard, Pressable, ActivityIndicator, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { apiRequest } from '../utils/api';
 
 type CategoryType = '공지' | '일반' | '매뉴얼';
 type BoardType = {
@@ -12,6 +13,18 @@ type BoardType = {
   category: CategoryType;
   title: string;
   isNew: boolean;
+};
+
+// API 타입 → NOTICE: 공지, NORMAL: 일반
+const typeToCategory = (type: string): CategoryType => {
+  if (type === 'NOTICE') return '공지';
+  if (type === 'NORMAL') return '일반';
+  return '일반';
+};
+
+const categoryToType = (category: CategoryType): string => {
+  if (category === '공지') return 'NOTICE';
+  return 'NORMAL';
 };
 
 export default function BoardScreen() {
@@ -22,12 +35,32 @@ export default function BoardScreen() {
   const [selectedCategory, setSelectedCategory] = useState<CategoryType>('공지');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [newBoardTitle, setNewBoardTitle] = useState('');
+  const [boards, setBoards] = useState<BoardType[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
 
-  const [boards, setBoards] = useState<BoardType[]>([
-    { id: '1', category: '공지', title: '메뉴 안내 게시판', isNew: true },
-    { id: '2', category: '공지', title: '가격 인상/변경 안내 게시판', isNew: false },
-    { id: '3', category: '일반', title: '궁금한 점 게시판', isNew: false },
-  ]);
+  // 게시판 목록 불러오기
+  const fetchBoards = async () => {
+    setLoading(true);
+    try {
+      const result = await apiRequest('/boards/my');
+      const mapped: BoardType[] = result.map((item: any) => ({
+        id: String(item.boardId),
+        category: typeToCategory(item.type),
+        title: item.boardName,
+        isNew: false,
+      }));
+      setBoards(mapped);
+    } catch (error: any) {
+      Alert.alert('오류', '게시판 목록을 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBoards();
+  }, []);
 
   const filteredBoards = useMemo(() => {
     return boards.filter(board => 
@@ -35,21 +68,29 @@ export default function BoardScreen() {
     );
   }, [boards, searchText]);
 
-  const handleCreateBoard = () => {
-    if (newBoardTitle.trim() === '') return; 
+  // 게시판 생성
+  const handleCreateBoard = async () => {
+    if (newBoardTitle.trim() === '') return;
 
-    const newBoard: BoardType = {
-      id: Date.now().toString(),
-      category: selectedCategory,
-      title: newBoardTitle.trim(),
-      isNew: true, 
-    };
+    setCreateLoading(true);
+    try {
+      await apiRequest('/boards', {
+        method: 'POST',
+        body: JSON.stringify({
+          boardName: newBoardTitle.trim(),
+          type: categoryToType(selectedCategory),
+        }),
+      });
 
-    setBoards([newBoard, ...boards]);
-    
-    setIsModalOpen(false);
-    setNewBoardTitle('');
-    setIsDropdownOpen(false);
+      setIsModalOpen(false);
+      setNewBoardTitle('');
+      setIsDropdownOpen(false);
+      await fetchBoards(); // 목록 새로고침
+    } catch (error: any) {
+      Alert.alert('오류', '게시판 생성에 실패했습니다.');
+    } finally {
+      setCreateLoading(false);
+    }
   };
 
   const getBadgeStyle = (category: CategoryType) => {
@@ -64,16 +105,13 @@ export default function BoardScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        
         <View style={styles.header}>
-          {/* 🔥 수정된 부분 */}
           <TouchableOpacity 
             onPress={() => router.replace('/')} 
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="chevron-back" size={26} color="#111" />
           </TouchableOpacity>
-
           <Text style={styles.headerTitle}>게시판</Text>
           <View style={{ width: 26 }} /> 
         </View>
@@ -91,30 +129,38 @@ export default function BoardScreen() {
             />
           </View>
 
-          {filteredBoards.map((board) => {
-            const badgeColor = getBadgeStyle(board.category);
-            return (
-              <TouchableOpacity 
-                key={board.id} 
-                style={styles.boardCard} 
-                activeOpacity={0.7}
-                onPress={() => {
-                  router.push({
-                    pathname: '/post-list', 
-                    params: { boardTitle: board.title, category: board.category }
-                  });
-                }}
-              >
-                <View style={styles.cardLeft}>
-                  <View style={[styles.badge, { backgroundColor: badgeColor.bg }]}>
-                    <Text style={[styles.badgeText, { color: badgeColor.text }]}>{board.category}</Text>
+          {loading ? (
+            <ActivityIndicator size="large" color="#2140DC" style={{ marginTop: 40 }} />
+          ) : (
+            filteredBoards.map((board) => {
+              const badgeColor = getBadgeStyle(board.category);
+              return (
+                <TouchableOpacity 
+                  key={board.id} 
+                  style={styles.boardCard} 
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    router.push({
+                      pathname: '/post-list', 
+                      params: { 
+                        boardId: board.id,       // ← boardId 추가
+                        boardTitle: board.title, 
+                        category: board.category 
+                      }
+                    });
+                  }}
+                >
+                  <View style={styles.cardLeft}>
+                    <View style={[styles.badge, { backgroundColor: badgeColor.bg }]}>
+                      <Text style={[styles.badgeText, { color: badgeColor.text }]}>{board.category}</Text>
+                    </View>
+                    <Text style={styles.boardTitle}>{board.title}</Text>
                   </View>
-                  <Text style={styles.boardTitle}>{board.title}</Text>
-                </View>
-                {board.isNew && <Text style={styles.newTag}>new</Text>}
-              </TouchableOpacity>
-            );
-          })}
+                  {board.isNew && <Text style={styles.newTag}>new</Text>}
+                </TouchableOpacity>
+              );
+            })
+          )}
         </ScrollView>
       </View>
 
@@ -126,10 +172,7 @@ export default function BoardScreen() {
       <Modal visible={isModalOpen} transparent={true} animationType="fade">
         <Pressable 
           style={styles.modalOverlay} 
-          onPress={() => {
-            Keyboard.dismiss();
-            setIsDropdownOpen(false);
-          }}
+          onPress={() => { Keyboard.dismiss(); setIsDropdownOpen(false); }}
         >
           <Pressable style={styles.modalContainer} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalHeader}>
@@ -145,10 +188,7 @@ export default function BoardScreen() {
                 <TouchableOpacity 
                   style={styles.categorySelectBtn} 
                   activeOpacity={0.7}
-                  onPress={() => {
-                    Keyboard.dismiss(); 
-                    setIsDropdownOpen(!isDropdownOpen);
-                  }}
+                  onPress={() => { Keyboard.dismiss(); setIsDropdownOpen(!isDropdownOpen); }}
                 >
                   <Text style={styles.categorySelectText}>{selectedCategory}</Text>
                   <Ionicons name={isDropdownOpen ? "chevron-up" : "chevron-down"} size={14} color="#2140DC" />
@@ -156,14 +196,11 @@ export default function BoardScreen() {
 
                 {isDropdownOpen && (
                   <View style={styles.dropdownMenu}>
-                    {(['공지', '일반', '매뉴얼'] as CategoryType[]).map((item, index) => (
+                    {(['공지', '일반'] as CategoryType[]).map((item, index) => (
                       <TouchableOpacity 
                         key={item} 
-                        style={[styles.dropdownItem, index === 2 && { borderBottomWidth: 0 }]}
-                        onPress={() => {
-                          setSelectedCategory(item);
-                          setIsDropdownOpen(false);
-                        }}
+                        style={[styles.dropdownItem, index === 1 && { borderBottomWidth: 0 }]}
+                        onPress={() => { setSelectedCategory(item); setIsDropdownOpen(false); }}
                       >
                         <Text style={styles.dropdownItemText}>{item}</Text>
                       </TouchableOpacity>
@@ -183,12 +220,15 @@ export default function BoardScreen() {
 
               <View style={styles.submitRow}>
                 <TouchableOpacity 
-                  style={[styles.submitBtn, newBoardTitle.trim() === '' && { backgroundColor: '#BDBDBD' }]} 
+                  style={[styles.submitBtn, (newBoardTitle.trim() === '' || createLoading) && { backgroundColor: '#BDBDBD' }]} 
                   activeOpacity={0.8}
                   onPress={handleCreateBoard}
-                  disabled={newBoardTitle.trim() === ''} 
+                  disabled={newBoardTitle.trim() === '' || createLoading}
                 >
-                  <Text style={styles.submitBtnText}>등록하기</Text>
+                  {createLoading 
+                    ? <ActivityIndicator color="#FFF" />
+                    : <Text style={styles.submitBtnText}>등록하기</Text>
+                  }
                 </TouchableOpacity>
               </View>
             </View>
