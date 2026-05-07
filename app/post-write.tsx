@@ -34,14 +34,11 @@ export default function PostWriteScreen() {
       });
 
       Alert.alert('등록 완료', '게시글이 등록되었습니다.', [
-        {
-          text: '확인',
-          onPress: () => router.replace({
-            pathname: '/post-list',
-            params: { boardId, boardTitle, category: boardCategory }
-          }),
-        },
-      ]);
+  {
+    text: '확인',
+    onPress: () => router.back(), // ← 그냥 뒤로가기
+  },
+]);
     } catch (error: any) {
       Alert.alert('오류', '게시글 등록에 실패했습니다.');
     } finally {

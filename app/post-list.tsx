@@ -3,6 +3,8 @@ import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, ScrollView, Act
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { apiRequest } from '../utils/api';
+import { useFocusEffect } from 'expo-router';
+import { useCallback } from 'react';
 
 type PostType = {
   id: string;
@@ -41,18 +43,20 @@ export default function PostListScreen() {
     }
   };
 
-  useEffect(() => {
+  useFocusEffect(
+  useCallback(() => {
     fetchPosts();
-  }, [boardId]);
+  }, [boardId])
+);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.replace('/board')}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
             <Ionicons name="chevron-back" size={26} color="#111" />
           </TouchableOpacity>
           <View style={styles.headerTitleGroup}>
