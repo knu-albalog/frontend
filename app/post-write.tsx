@@ -1,42 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   SafeAreaView, View, Text, StyleSheet, TouchableOpacity, 
-  TextInput, KeyboardAvoidingView, Platform, ScrollView, Keyboard 
+  TextInput, KeyboardAvoidingView, Platform, ScrollView,
+  ActivityIndicator, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-
-const AVAILABLE_BOARDS = [
-  { title: '메뉴 안내 게시판', category: '공지' },
-  { title: '가격 인상/변경 안내 게시판', category: '공지' },
-  { title: '궁금한 점 게시판', category: '일반' },
-];
+import { apiRequest } from '../utils/api';
 
 export default function PostWriteScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   
+  const boardId = typeof params.boardId === 'string' ? params.boardId : '';
+  const boardTitle = typeof params.boardTitle === 'string' ? params.boardTitle : '게시판';
+  const boardCategory = typeof params.category === 'string' ? params.category : '공지';
+
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [selectedBoard, setSelectedBoard] = useState({
-    title: typeof params.boardTitle === 'string' ? params.boardTitle : '메뉴 안내 게시판',
-    category: typeof params.category === 'string' ? params.category : '공지',
-  });
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (title.trim() === '' || content.trim() === '') return;
-    
-    router.replace({
-      pathname: '/post-list',
-      params: {
-        boardTitle: selectedBoard.title,
-        category: selectedBoard.category,
-        newPostTitle: title.trim(),
-        newPostContent: content.trim(),
-        timestamp: Date.now().toString(),
-      }
-    });
+
+    setLoading(true);
+    try {
+      await apiRequest(`/boards/${boardId}/posts`, {
+        method: 'POST',
+        body: JSON.stringify({
+          title: title.trim(),
+          content: content.trim(),
+        }),
+      });
+
+      Alert.alert('등록 완료', '게시글이 등록되었습니다.', [
+  {
+    text: '확인',
+    onPress: () => router.back(), // ← 그냥 뒤로가기
+  },
+]);
+    } catch (error: any) {
+      Alert.alert('오류', '게시글 등록에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -54,31 +61,12 @@ export default function PostWriteScreen() {
             <View style={{ width: 26 }} />
           </View>
 
-          <View style={{ zIndex: 10 }}>
-            <TouchableOpacity 
-              style={styles.boardSelectBox} 
-              onPress={() => { Keyboard.dismiss(); setIsDropdownOpen(!isDropdownOpen); }}
-            >
-              <View style={[styles.badge, { backgroundColor: selectedBoard.category === '공지' ? '#F0F4FF' : '#F5F5F5' }]}>
-                <Text style={[styles.badgeText, { color: selectedBoard.category === '공지' ? '#2140DC' : '#333' }]}>{selectedBoard.category}</Text>
-              </View>
-              <Text style={styles.selectedBoardName}>{selectedBoard.title}</Text>
-              <Ionicons name={isDropdownOpen ? "chevron-up" : "chevron-down"} size={18} color="#BDBDBD" />
-            </TouchableOpacity>
-
-            {isDropdownOpen && (
-              <View style={styles.dropdownList}>
-                {AVAILABLE_BOARDS.map((board, index) => (
-                  <TouchableOpacity 
-                    key={index} 
-                    style={styles.dropdownItem}
-                    onPress={() => { setSelectedBoard(board); setIsDropdownOpen(false); }}
-                  >
-                    <Text style={styles.dropdownItemText}>{board.title}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
+          {/* 게시판 표시 */}
+          <View style={styles.boardSelectBox}>
+            <View style={[styles.badge, { backgroundColor: boardCategory === '공지' ? '#F0F4FF' : '#F5F5F5' }]}>
+              <Text style={[styles.badgeText, { color: boardCategory === '공지' ? '#2140DC' : '#333' }]}>{boardCategory}</Text>
+            </View>
+            <Text style={styles.selectedBoardName}>{boardTitle}</Text>
           </View>
 
           <TextInput
@@ -108,11 +96,14 @@ export default function PostWriteScreen() {
 
         <View style={styles.bottomButtonContainer}>
           <TouchableOpacity 
-            style={[styles.submitButton, (title.trim() === '' || content.trim() === '') && { backgroundColor: '#E0E0E0' }]} 
+            style={[styles.submitButton, (title.trim() === '' || content.trim() === '' || loading) && { backgroundColor: '#E0E0E0' }]} 
             onPress={handleRegister}
-            disabled={title.trim() === '' || content.trim() === ''}
+            disabled={title.trim() === '' || content.trim() === '' || loading}
           >
-            <Text style={styles.submitButtonText}>등록하기</Text>
+            {loading
+              ? <ActivityIndicator color="#FFF" />
+              : <Text style={styles.submitButtonText}>등록하기</Text>
+            }
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -129,9 +120,6 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginRight: 10 },
   badgeText: { fontSize: 12, fontWeight: '600' },
   selectedBoardName: { flex: 1, fontSize: 15, color: '#111', fontWeight: '600' },
-  dropdownList: { position: 'absolute', top: 65, left: 0, right: 0, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EFEFEF', borderRadius: 8, zIndex: 20, elevation: 5 },
-  dropdownItem: { padding: 15, borderBottomWidth: 1, borderBottomColor: '#F9F9F9' },
-  dropdownItemText: { fontSize: 14 },
   titleInput: { fontSize: 18, fontWeight: 'bold', borderBottomWidth: 1, borderBottomColor: '#F0F0F0', paddingVertical: 12, marginBottom: 20 },
   inputWrapper: { flex: 1, minHeight: 300, borderWidth: 1, borderColor: '#F0F0F0', borderRadius: 8, marginBottom: 20, position: 'relative' },
   charCountContainer: { position: 'absolute', top: 14, right: 14, zIndex: 1 },
