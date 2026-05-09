@@ -22,7 +22,22 @@ import { deleteAccessToken } from '../../utils/tokenStorage';
 const MAIN_COLOR = '#2140DC';
 const MAIN_LIGHT_COLOR = '#EEF1FF';
 
-type RoleType = '사장님' | '파트타이머';
+type RoleType = '사장님' | '알바생';
+
+type WorkplaceUser = {
+  id: number;
+  name: string;
+  role: string;
+};
+
+type WorkplaceInfo = {
+  id?: number;
+  name?: string;
+  inviteCode?: string;
+  createdAt?: string;
+  users?: WorkplaceUser[];
+  admins?: WorkplaceUser[];
+};
 
 const avatarColors = [MAIN_COLOR, '#FF8A00', '#27AE60', '#9B51E0', '#EB5757'];
 
@@ -79,14 +94,23 @@ export default function MyPageScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const [userId, setUserId] = useState<number | null>(null);
   const [nickname, setNickname] = useState('사용자');
-  const [role, setRole] = useState<RoleType>('파트타이머');
+  const [role, setRole] = useState<RoleType>('알바생');
   const [email, setEmail] = useState('');
   const [avatarColor, setAvatarColor] = useState(MAIN_COLOR);
 
+  const [workplace, setWorkplace] = useState<WorkplaceInfo | null>(null);
+  const [staffList, setStaffList] = useState<WorkplaceUser[]>([]);
+  const [tempWorkplaceName, setTempWorkplaceName] = useState('');
+
   const [loading, setLoading] = useState(true);
+  const [workplaceLoading, setWorkplaceLoading] = useState(false);
+
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [infoModalVisible, setInfoModalVisible] = useState(false);
+  const [staffModalVisible, setStaffModalVisible] = useState(false);
+  const [workplaceModalVisible, setWorkplaceModalVisible] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
 
   const [tempNickname, setTempNickname] = useState('');
@@ -99,6 +123,8 @@ export default function MyPageScreen() {
   const [currentPasswordVisible, setCurrentPasswordVisible] = useState(false);
   const [newPasswordVisible, setNewPasswordVisible] = useState(false);
   const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
+
+  const isBoss = role === '사장님';
 
   const getRoleText = (value: any): RoleType => {
     console.log('role 값 확인:', value);
@@ -118,7 +144,23 @@ export default function MyPageScreen() {
       return '사장님';
     }
 
-    return '파트타이머';
+    return '알바생';
+  };
+
+  const getStaffRoleText = (value: any) => {
+    if (
+      value === 'ADMIN' ||
+      value === 'admin' ||
+      value === 'OWNER' ||
+      value === 'owner' ||
+      value === 'BOSS' ||
+      value === 'boss' ||
+      value === '사장님'
+    ) {
+      return '사장님';
+    }
+
+    return '알바생';
   };
 
   const getProfileIconName = () => {
@@ -137,14 +179,31 @@ export default function MyPageScreen() {
     }
   };
 
-  const loadProfile = async () => {
-    setLoading(true);
+  const mergeUsers = (users: WorkplaceUser[] = [], admins: WorkplaceUser[] = []) => {
+    const map = new Map<number, WorkplaceUser>();
 
+    users.forEach((user) => {
+      map.set(user.id, user);
+    });
+
+    admins.forEach((admin) => {
+      map.set(admin.id, {
+        ...admin,
+        role: admin.role || 'ADMIN',
+      });
+    });
+
+    return Array.from(map.values());
+  };
+
+  const loadProfile = async () => {
     try {
       const result = await apiRequest('/user/profile');
 
+      setUserId(result?.id ?? result?.userId ?? null);
       setNickname(result?.name ?? result?.nickname ?? '사용자');
       setEmail(result?.email ?? '');
+
       setRole(
         getRoleText(
           result?.role ??
@@ -163,19 +222,63 @@ export default function MyPageScreen() {
     } catch (error: any) {
       console.log('프로필 조회 실패:', error.message);
       Alert.alert('오류', '프로필 정보를 불러오지 못했습니다.');
+    }
+  };
+
+  const loadWorkplaceInfo = async () => {
+    try {
+      const result = await apiRequest('/workplace/info');
+
+      setWorkplace(result);
+      setTempWorkplaceName(result?.name ?? '');
+
+      const mergedUsers = mergeUsers(result?.users, result?.admins);
+      setStaffList(mergedUsers);
+    } catch (error: any) {
+      console.log('사업장 정보 조회 실패:', error.message);
+      setWorkplace(null);
+      setStaffList([]);
+    }
+  };
+
+  const loadStaffList = async () => {
+    try {
+      const result = await apiRequest('/workplace/users');
+      setStaffList(Array.isArray(result) ? result : []);
+    } catch (error: any) {
+      console.log('직원 조회 실패:', error.message);
+      Alert.alert('오류', '직원 정보를 불러오지 못했습니다.');
+    }
+  };
+
+  const loadAllData = async () => {
+    setLoading(true);
+
+    try {
+      await Promise.all([loadProfile(), loadWorkplaceInfo()]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadProfile();
+    loadAllData();
   }, []);
 
   const openProfileEditModal = () => {
     setTempNickname(nickname);
     setTempAvatarColor(avatarColor);
     setEditModalVisible(true);
+  };
+
+  const openStaffModal = async () => {
+    setStaffModalVisible(true);
+    await loadStaffList();
+  };
+
+  const openWorkplaceModal = async () => {
+    setWorkplaceModalVisible(true);
+    await loadWorkplaceInfo();
   };
 
   const openPasswordModal = () => {
@@ -222,6 +325,42 @@ export default function MyPageScreen() {
     }
   };
 
+  const saveWorkplaceName = async () => {
+    if (!tempWorkplaceName.trim()) {
+      Alert.alert('알림', '사업장 이름을 입력해주세요.');
+      return;
+    }
+
+    if (!isBoss) {
+      Alert.alert('권한 없음', '사업장 이름 수정은 사장님만 가능합니다.');
+      return;
+    }
+
+    setWorkplaceLoading(true);
+
+    try {
+      const result = await apiRequest('/workplace', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: tempWorkplaceName.trim(),
+        }),
+      });
+
+      setWorkplace((prev) => ({
+        ...prev,
+        ...result,
+        name: result?.name ?? tempWorkplaceName.trim(),
+      }));
+
+      Alert.alert('완료', '사업장 이름이 수정되었습니다.');
+    } catch (error: any) {
+      console.log('사업장 이름 수정 실패:', error.message);
+      Alert.alert('수정 실패', error.message || '다시 시도해주세요.');
+    } finally {
+      setWorkplaceLoading(false);
+    }
+  };
+
   const changePassword = async () => {
     if (!currentPassword.trim()) {
       Alert.alert('알림', '현재 비밀번호를 입력해주세요.');
@@ -264,6 +403,44 @@ export default function MyPageScreen() {
     }
   };
 
+  const removeStaff = (staff: WorkplaceUser) => {
+    if (!isBoss) {
+      Alert.alert('권한 없음', '직원 퇴장은 사장님만 가능합니다.');
+      return;
+    }
+
+    if (userId !== null && staff.id === userId) {
+      Alert.alert('알림', '본인은 퇴장시킬 수 없습니다.');
+      return;
+    }
+
+    Alert.alert(
+      '직원 퇴장',
+      `${staff.name}님을 사업장에서 퇴장시키겠어요?`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '퇴장',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiRequest(`/workplace/users/${staff.id}`, {
+                method: 'DELETE',
+              });
+
+              setStaffList((prev) => prev.filter((item) => item.id !== staff.id));
+
+              Alert.alert('완료', '직원을 퇴장시켰습니다.');
+            } catch (error: any) {
+              console.log('직원 퇴장 실패:', error.message);
+              Alert.alert('퇴장 실패', error.message || '다시 시도해주세요.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleLogout = () => {
     Alert.alert('로그아웃', '로그아웃 하시겠어요?', [
       { text: '취소', style: 'cancel' },
@@ -279,18 +456,41 @@ export default function MyPageScreen() {
     ]);
   };
 
-  const handleWithdraw = () => {
-    Alert.alert('회원탈퇴', '정말 탈퇴하시겠어요?\n이 동작은 되돌릴 수 없습니다.', [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '탈퇴하기',
-        style: 'destructive',
-        onPress: () => {
-          setInfoModalVisible(false);
-          Alert.alert('안내', '회원탈퇴 API는 Swagger에 없어서 추후 연동이 필요합니다.');
+  const handleLeaveWorkplace = () => {
+    Alert.alert(
+      '사업장 탈퇴',
+      '현재 소속된 사업장에서 탈퇴하시겠어요?\n계정은 삭제되지 않습니다.',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '탈퇴하기',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiRequest('/workplace/leave', {
+                method: 'DELETE',
+              });
+
+              setWorkplace(null);
+              setStaffList([]);
+              setTempWorkplaceName('');
+
+              Alert.alert('완료', '사업장에서 탈퇴했습니다.', [
+                {
+                  text: '확인',
+                  onPress: () => {
+                    router.replace('/role-select');
+                  },
+                },
+              ]);
+            } catch (error: any) {
+              console.log('사업장 탈퇴 실패:', error.message);
+              Alert.alert('탈퇴 실패', error.message || '다시 시도해주세요.');
+            }
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
 
   if (loading) {
@@ -352,10 +552,56 @@ export default function MyPageScreen() {
                 <Ionicons name="person-outline" size={18} color={MAIN_COLOR} />
               </View>
 
-              <View>
+              <View style={styles.menuTextBox}>
                 <Text style={styles.menuTitle}>나의 정보</Text>
                 <Text style={styles.menuDescription}>
-                  이메일, 역할, 회원탈퇴 정보를 확인할 수 있습니다
+                  이메일과 역할 정보를 확인할 수 있습니다
+                </Text>
+              </View>
+            </View>
+
+            <Ionicons name="chevron-forward" size={20} color="#B7B7B7" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.8}
+            onPress={openStaffModal}
+          >
+            <View style={styles.menuLeft}>
+              <View style={styles.iconCircle}>
+                <Ionicons name="people-outline" size={18} color={MAIN_COLOR} />
+              </View>
+
+              <View style={styles.menuTextBox}>
+                <Text style={styles.menuTitle}>직원 정보</Text>
+                <Text style={styles.menuDescription}>
+                  내 사업장에 속한 직원 닉네임을 확인합니다
+                </Text>
+              </View>
+            </View>
+
+            <Ionicons name="chevron-forward" size={20} color="#B7B7B7" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.menuRow}
+            activeOpacity={0.8}
+            onPress={openWorkplaceModal}
+          >
+            <View style={styles.menuLeft}>
+              <View style={styles.iconCircle}>
+                <Ionicons name="storefront-outline" size={18} color={MAIN_COLOR} />
+              </View>
+
+              <View style={styles.menuTextBox}>
+                <Text style={styles.menuTitle}>사업장 정보</Text>
+                <Text style={styles.menuDescription}>
+                  사업장 이름과 초대코드를 확인합니다
                 </Text>
               </View>
             </View>
@@ -375,7 +621,7 @@ export default function MyPageScreen() {
                 <Ionicons name="shield-checkmark-outline" size={18} color={MAIN_COLOR} />
               </View>
 
-              <View>
+              <View style={styles.menuTextBox}>
                 <Text style={styles.menuTitle}>비밀번호 변경</Text>
                 <Text style={styles.menuDescription}>
                   현재 비밀번호 확인 후 새 비밀번호로 변경합니다
@@ -394,9 +640,28 @@ export default function MyPageScreen() {
                 <Ionicons name="log-out-outline" size={18} color={MAIN_COLOR} />
               </View>
 
-              <View>
+              <View style={styles.menuTextBox}>
                 <Text style={styles.menuTitle}>로그아웃</Text>
                 <Text style={styles.menuDescription}>현재 계정에서 로그아웃합니다</Text>
+              </View>
+            </View>
+
+            <Ionicons name="chevron-forward" size={20} color="#B7B7B7" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity style={styles.menuRow} activeOpacity={0.8} onPress={handleLeaveWorkplace}>
+            <View style={styles.menuLeft}>
+              <View style={styles.withdrawIconCircle}>
+                <Ionicons name="exit-outline" size={18} color="#E24A4A" />
+              </View>
+
+              <View style={styles.menuTextBox}>
+                <Text style={styles.withdrawMenuTitle}>사업장 탈퇴</Text>
+                <Text style={styles.menuDescription}>
+                  현재 소속된 사업장에서 나갑니다
+                </Text>
               </View>
             </View>
 
@@ -503,10 +768,6 @@ export default function MyPageScreen() {
               <Text style={styles.readonlyText}>{role}</Text>
             </View>
 
-            <TouchableOpacity style={styles.withdrawButton} onPress={handleWithdraw} activeOpacity={0.8}>
-              <Text style={styles.withdrawText}>회원탈퇴</Text>
-            </TouchableOpacity>
-
             <View style={styles.modalButtonRow}>
               <TouchableOpacity
                 style={styles.confirmButton}
@@ -515,6 +776,153 @@ export default function MyPageScreen() {
               >
                 <Text style={styles.confirmButtonText}>확인</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={staffModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setStaffModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={[
+            styles.modalOverlay,
+            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
+          ]}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>직원 정보</Text>
+
+            <Text style={styles.modalSubText}>
+              내 사업장에 속한 직원 닉네임을 확인할 수 있습니다.
+            </Text>
+
+            <ScrollView style={styles.staffListBox} showsVerticalScrollIndicator={false}>
+              {staffList.length === 0 ? (
+                <View style={styles.emptyBox}>
+                  <Text style={styles.emptyText}>등록된 직원이 없습니다.</Text>
+                </View>
+              ) : (
+                staffList.map((staff) => (
+                  <View key={staff.id} style={styles.staffRow}>
+                    <View style={styles.staffInfo}>
+                      <View style={styles.staffIconCircle}>
+                        <Ionicons name="person-outline" size={17} color={MAIN_COLOR} />
+                      </View>
+
+                      <View>
+                        <Text style={styles.staffName}>{staff.name || '이름 없음'}</Text>
+                        <Text style={styles.staffRole}>{getStaffRoleText(staff.role)}</Text>
+                      </View>
+                    </View>
+
+                    {isBoss && userId !== staff.id && (
+                      <TouchableOpacity
+                        style={styles.kickButton}
+                        onPress={() => removeStaff(staff)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.kickButtonText}>퇴장</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            {!isBoss && (
+              <Text style={styles.permissionNotice}>
+                직원 퇴장 기능은 사장님만 사용할 수 있습니다.
+              </Text>
+            )}
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={styles.confirmButton}
+                onPress={() => setStaffModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.confirmButtonText}>확인</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      <Modal
+        visible={workplaceModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setWorkplaceModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          style={[
+            styles.modalOverlay,
+            { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 },
+          ]}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>사업장 정보</Text>
+
+            <Text style={styles.inputLabel}>사업장 이름</Text>
+
+            <TextInput
+              style={[styles.input, !isBoss && styles.disabledInput]}
+              placeholder="사업장 이름"
+              placeholderTextColor="#A9A9A9"
+              value={tempWorkplaceName}
+              onChangeText={setTempWorkplaceName}
+              editable={isBoss}
+            />
+
+            {!isBoss && (
+              <Text style={styles.permissionNotice}>
+                사업장 이름 수정은 사장님만 가능합니다.
+              </Text>
+            )}
+
+            <Text style={[styles.infoLabel, { marginTop: 18 }]}>초대코드</Text>
+
+            <View style={styles.readonlyBox}>
+              <Text style={styles.readonlyText}>
+                {workplace?.inviteCode || '초대코드 없음'}
+              </Text>
+            </View>
+
+            <Text style={[styles.infoLabel, { marginTop: 18 }]}>사업장 ID</Text>
+
+            <View style={styles.readonlyBox}>
+              <Text style={styles.readonlyText}>
+                {workplace?.id ? String(workplace.id) : '사업장 정보 없음'}
+              </Text>
+            </View>
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setWorkplaceModalVisible(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelButtonText}>닫기</Text>
+              </TouchableOpacity>
+
+              {isBoss && (
+                <TouchableOpacity
+                  style={styles.confirmButton}
+                  onPress={saveWorkplaceName}
+                  activeOpacity={0.8}
+                  disabled={workplaceLoading}
+                >
+                  <Text style={styles.confirmButtonText}>
+                    {workplaceLoading ? '저장 중...' : '저장'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -704,6 +1112,10 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
 
+  menuTextBox: {
+    flex: 1,
+  },
+
   iconCircle: {
     width: 34,
     height: 34,
@@ -714,10 +1126,27 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
 
+  withdrawIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
   menuTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: '#242424',
+    marginBottom: 4,
+  },
+
+  withdrawMenuTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#E24A4A',
     marginBottom: 4,
   },
 
@@ -744,6 +1173,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 20,
     padding: 20,
+    maxHeight: '85%',
   },
 
   modalTitle: {
@@ -751,6 +1181,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#111111',
     marginBottom: 18,
+  },
+
+  modalSubText: {
+    fontSize: 13,
+    color: '#777777',
+    lineHeight: 19,
+    marginBottom: 14,
   },
 
   avatarPreviewRow: {
@@ -809,6 +1246,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#111111',
     backgroundColor: '#FAFBFF',
+  },
+
+  disabledInput: {
+    backgroundColor: '#F3F4F8',
+    color: '#888888',
   },
 
   passwordInputWrap: {
@@ -897,17 +1339,83 @@ const styles = StyleSheet.create({
     color: '#333333',
   },
 
-  withdrawButton: {
-    marginTop: 16,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderRadius: 12,
-    backgroundColor: '#FFF2F2',
+  staffListBox: {
+    maxHeight: 320,
   },
 
-  withdrawText: {
+  staffRow: {
+    minHeight: 64,
+    borderRadius: 14,
+    backgroundColor: '#F8F9FD',
+    borderWidth: 1,
+    borderColor: '#EDF0F6',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  staffInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+
+  staffIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: MAIN_LIGHT_COLOR,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+
+  staffName: {
     fontSize: 14,
     fontWeight: '700',
+    color: '#222222',
+    marginBottom: 3,
+  },
+
+  staffRole: {
+    fontSize: 11,
+    color: '#999999',
+  },
+
+  kickButton: {
+    paddingHorizontal: 12,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#FFF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+
+  kickButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: '#E24A4A',
+  },
+
+  permissionNotice: {
+    fontSize: 12,
+    color: '#999999',
+    lineHeight: 18,
+    marginTop: 10,
+  },
+
+  emptyBox: {
+    paddingVertical: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  emptyText: {
+    fontSize: 13,
+    color: '#999999',
   },
 });
