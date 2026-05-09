@@ -3,19 +3,21 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { apiRequest, publicRequest } from '../utils/api';
 import { saveAccessToken } from '../utils/tokenStorage';
 
 export default function LoginScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
+
   const role = params.role as string;
 
   const [email, setEmail] = useState('');
@@ -71,8 +73,15 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          { paddingBottom: insets.bottom + 40 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.title}>로그인</Text>
 
         <TextInput
@@ -99,13 +108,16 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.loginBtn, (!isValid || loading) && { backgroundColor: '#BDBDBD' }]}
+          style={[
+            styles.loginBtn,
+            (!isValid || loading) && { backgroundColor: '#BDBDBD' },
+          ]}
           disabled={!isValid || loading}
           activeOpacity={0.8}
           onPress={handleLogin}
         >
           {loading ? (
-            <ActivityIndicator color="#FFF" />
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
             <Text style={styles.loginBtnText}>로그인</Text>
           )}
@@ -122,19 +134,24 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+
   container: {
     flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 80,
-    paddingBottom: 40,
   },
+
   title: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#111',
+    color: '#111111',
     marginBottom: 32,
   },
+
   input: {
     borderWidth: 1,
     borderColor: '#E0E0E0',
@@ -142,17 +159,20 @@ const styles = StyleSheet.create({
     height: 52,
     paddingHorizontal: 16,
     fontSize: 15,
-    color: '#111',
+    color: '#111111',
     marginBottom: 12,
   },
+
   forgotBtn: {
     alignSelf: 'flex-end',
     marginBottom: 24,
   },
+
   forgotText: {
     fontSize: 12,
-    color: '#888',
+    color: '#888888',
   },
+
   loginBtn: {
     backgroundColor: '#2140DC',
     height: 52,
@@ -161,17 +181,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
+
   loginBtnText: {
-    color: '#FFF',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
+
   bottomText: {
     fontSize: 13,
-    color: '#888',
+    color: '#888888',
     textAlign: 'center',
     marginBottom: 8,
   },
+
   signupLink: {
     color: '#2140DC',
     fontWeight: 'bold',
