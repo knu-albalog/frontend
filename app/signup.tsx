@@ -1,15 +1,23 @@
-import React, { useState } from 'react';
-import { 
-  SafeAreaView, Text, StyleSheet, TouchableOpacity, 
-  TextInput, ScrollView, Alert, ActivityIndicator 
-} from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { publicRequest } from '../utils/api';
 
 export default function SignupScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
+
   const role = params.role as string;
 
   const [email, setEmail] = useState('');
@@ -26,6 +34,7 @@ export default function SignupScreen() {
 
     setEmailError('');
     setLoading(true);
+
     try {
       await publicRequest('/auth/signup', {
         method: 'POST',
@@ -55,8 +64,15 @@ export default function SignupScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          { paddingBottom: insets.bottom + 40 },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={26} color="#111" />
         </TouchableOpacity>
@@ -68,10 +84,14 @@ export default function SignupScreen() {
           placeholder="이메일"
           placeholderTextColor="#BDBDBD"
           value={email}
-          onChangeText={(text) => { setEmail(text); setEmailError(''); }}
+          onChangeText={(text) => {
+            setEmail(text);
+            setEmailError('');
+          }}
           autoCapitalize="none"
           keyboardType="email-address"
         />
+
         {emailError ? (
           <Text style={styles.errorText}>{emailError}</Text>
         ) : null}
@@ -86,13 +106,17 @@ export default function SignupScreen() {
         />
 
         <TextInput
-          style={[styles.input, passwordConfirm && password !== passwordConfirm && styles.inputError]}
+          style={[
+            styles.input,
+            passwordConfirm && password !== passwordConfirm && styles.inputError,
+          ]}
           placeholder="비밀번호 확인"
           placeholderTextColor="#BDBDBD"
           value={passwordConfirm}
           onChangeText={setPasswordConfirm}
           secureTextEntry
         />
+
         {passwordConfirm && password !== passwordConfirm && (
           <Text style={styles.errorText}>비밀번호가 일치하지 않습니다</Text>
         )}
@@ -106,15 +130,19 @@ export default function SignupScreen() {
         />
 
         <TouchableOpacity
-          style={[styles.signupBtn, (!isValid || loading) && { backgroundColor: '#BDBDBD' }]}
+          style={[
+            styles.signupBtn,
+            (!isValid || loading) && { backgroundColor: '#BDBDBD' },
+          ]}
           disabled={!isValid || loading}
           activeOpacity={0.8}
           onPress={handleSignup}
         >
-          {loading
-            ? <ActivityIndicator color="#FFF" />
-            : <Text style={styles.signupBtnText}>회원가입</Text>
-          }
+          {loading ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={styles.signupBtnText}>회원가입</Text>
+          )}
         </TouchableOpacity>
 
         <Text style={styles.bottomText}>
@@ -126,22 +154,81 @@ export default function SignupScreen() {
             로그인
           </Text>
         </Text>
-
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#FFFFFF' },
-  container: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 40 },
-  backBtn: { marginBottom: 24 },
-  title: { fontSize: 26, fontWeight: 'bold', color: '#111', marginBottom: 32 },
-  input: { borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 8, height: 52, paddingHorizontal: 16, fontSize: 15, color: '#111', marginBottom: 12 },
-  inputError: { borderColor: '#FF3B30' },
-  errorText: { color: '#FF3B30', fontSize: 12, marginBottom: 8, marginTop: -4 },
-  signupBtn: { backgroundColor: '#2140DC', height: 52, borderRadius: 8, justifyContent: 'center', alignItems: 'center', marginTop: 8, marginBottom: 24 },
-  signupBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  bottomText: { fontSize: 12, color: '#888', textAlign: 'center', lineHeight: 24 },
-  linkText: { color: '#2140DC', fontWeight: 'bold' },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+
+  container: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+  },
+
+  backBtn: {
+    marginBottom: 24,
+  },
+
+  title: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#111111',
+    marginBottom: 32,
+  },
+
+  input: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 8,
+    height: 52,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#111111',
+    marginBottom: 12,
+  },
+
+  inputError: {
+    borderColor: '#FF3B30',
+  },
+
+  errorText: {
+    color: '#FF3B30',
+    fontSize: 12,
+    marginBottom: 8,
+    marginTop: -4,
+  },
+
+  signupBtn: {
+    backgroundColor: '#2140DC',
+    height: 52,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+
+  signupBtnText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
+  bottomText: {
+    fontSize: 12,
+    color: '#888888',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+
+  linkText: {
+    color: '#2140DC',
+    fontWeight: 'bold',
+  },
 });
