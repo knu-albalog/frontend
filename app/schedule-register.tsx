@@ -92,12 +92,18 @@ function normalizeWorkplaceUsers(data: any): WorkplaceUser[] {
   return [];
 }
 
-function getUserId(user: WorkplaceUser | UserProfile) {
+function getUserId(user: WorkplaceUser | UserProfile | null | undefined) {
+  if (!user) return null;
   return user.id ?? user.userId ?? null;
 }
 
-function getDisplayName(user: WorkplaceUser | UserProfile) {
+function getDisplayName(user: WorkplaceUser | UserProfile | null | undefined) {
+  if (!user) return '이름 없음';
   return user.nickname || user.name || user.userName || '이름 없음';
+}
+
+function normalizeText(value?: string | null) {
+  return String(value || '').trim().toLowerCase();
 }
 
 function isAdminRole(role?: string | null) {
@@ -110,20 +116,41 @@ function isAdminRole(role?: string | null) {
   );
 }
 
+function isSameUser(
+  a: WorkplaceUser | UserProfile | null | undefined,
+  b: WorkplaceUser | UserProfile | null | undefined
+) {
+  if (!a || !b) return false;
+
+  const aId = getUserId(a);
+  const bId = getUserId(b);
+
+  if (aId != null && bId != null && Number(aId) === Number(bId)) {
+    return true;
+  }
+
+  const aName = normalizeText(getDisplayName(a));
+  const bName = normalizeText(getDisplayName(b));
+
+  if (aName && bName && aName === bName && isAdminRole(a.role) && isAdminRole(b.role)) {
+    return true;
+  }
+
+  return false;
+}
+
 function removeDuplicateUsers(users: WorkplaceUser[]) {
-  const map = new Map<string, WorkplaceUser>();
+  const result: WorkplaceUser[] = [];
 
   users.forEach((user) => {
-    const id = getUserId(user);
-    const name = getDisplayName(user);
-    const key = id ? `id-${id}` : `name-${name}`;
+    const duplicated = result.some((saved) => isSameUser(saved, user));
 
-    if (!map.has(key)) {
-      map.set(key, user);
+    if (!duplicated) {
+      result.push(user);
     }
   });
 
-  return Array.from(map.values());
+  return result;
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -402,9 +429,13 @@ export default function ScheduleRegisterScreen() {
         }
       : null;
 
-    const merged = currentUserAsWorker
-      ? [currentUserAsWorker, ...workplaceUsers]
+    const filteredUsers = currentUserAsWorker
+      ? workplaceUsers.filter((user) => !isSameUser(user, currentUserAsWorker))
       : workplaceUsers;
+
+    const merged = currentUserAsWorker
+      ? [currentUserAsWorker, ...filteredUsers]
+      : filteredUsers;
 
     return removeDuplicateUsers(merged);
   }, [currentUserProfile, workplaceUsers]);
@@ -582,7 +613,7 @@ export default function ScheduleRegisterScreen() {
     const userId = getUserId(user);
     const name = getDisplayName(user);
 
-    if (userId) {
+    if (userId != null) {
       setSelectedUserId(Number(userId));
     }
 
@@ -676,6 +707,7 @@ export default function ScheduleRegisterScreen() {
       console.log('스케줄 등록 요청:', {
         isAdminLike,
         targetUserId,
+        workerName,
         body: requestBody,
       });
 
@@ -1035,12 +1067,19 @@ export default function ScheduleRegisterScreen() {
                   workerSelectList.map((user, index) => {
                     const userId = getUserId(user);
                     const name = getDisplayName(user);
-                    const selected = selectedUserId === userId;
-                    const isMe = !!currentUserId && userId === currentUserId;
+                    const selected =
+                      selectedUserId != null &&
+                      userId != null &&
+                      Number(selectedUserId) === Number(userId);
+
+                    const isMe =
+                      currentUserId != null &&
+                      userId != null &&
+                      Number(currentUserId) === Number(userId);
 
                     return (
                       <TouchableOpacity
-                        key={`worker-${userId ?? 'no-id'}-${name}-${index}`}
+                        key={`worker-${userId ?? 'no-id'}-${normalizeText(name)}-${index}`}
                         style={[wm.userItem, selected && wm.userItemActive]}
                         onPress={() => handleSelectWorker(user)}
                         activeOpacity={0.8}
