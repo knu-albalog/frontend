@@ -54,6 +54,27 @@ function getFirstDayOfWeek(year: number, month: number) {
   return day === 0 ? 6 : day - 1;
 }
 
+function normalizeText(value?: string | null) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isAdminRole(role?: string | null) {
+  const upperRole = String(role || '').trim().toUpperCase();
+
+  return (
+    upperRole.includes('ADMIN') ||
+    upperRole.includes('OWNER') ||
+    upperRole.includes('MANAGER') ||
+    upperRole.includes('BOSS') ||
+    upperRole.includes('EMPLOYER') ||
+    upperRole.includes('STORE_OWNER') ||
+    upperRole.includes('WORKPLACE_OWNER') ||
+    upperRole.includes('사장') ||
+    upperRole.includes('점주') ||
+    upperRole.includes('관리자')
+  );
+}
+
 type UserProfile = {
   id?: number | null;
   userId?: number | null;
@@ -72,18 +93,6 @@ type WorkplaceUser = {
   role?: string | null;
 };
 
-type ScheduleItemResponse = {
-  id?: number | null;
-  userId?: number | null;
-  userName?: string | null;
-  workplaceId?: number | null;
-  workplaceName?: string | null;
-  workDate?: string | null;
-  startTime?: string | null;
-  endTime?: string | null;
-  note?: string | null;
-};
-
 function normalizeWorkplaceUsers(data: any): WorkplaceUser[] {
   if (Array.isArray(data)) return data;
   if (Array.isArray(data?.users)) return data.users;
@@ -100,20 +109,6 @@ function getUserId(user: WorkplaceUser | UserProfile | null | undefined) {
 function getDisplayName(user: WorkplaceUser | UserProfile | null | undefined) {
   if (!user) return '이름 없음';
   return user.nickname || user.name || user.userName || '이름 없음';
-}
-
-function normalizeText(value?: string | null) {
-  return String(value || '').trim().toLowerCase();
-}
-
-function isAdminRole(role?: string | null) {
-  const upperRole = String(role || '').toUpperCase();
-
-  return (
-    upperRole.includes('ADMIN') ||
-    upperRole.includes('OWNER') ||
-    upperRole.includes('MANAGER')
-  );
 }
 
 function isSameUser(
@@ -417,11 +412,22 @@ export default function ScheduleRegisterScreen() {
     return isAdminRole(currentUserRole);
   }, [currentUserRole]);
 
+  const selectedWorkerIsMe = useMemo(() => {
+    if (!currentUserProfile) return false;
+
+    const currentName = normalizeText(getDisplayName(currentUserProfile));
+    const selectedName = normalizeText(workerName);
+
+    if (!currentName || !selectedName) return false;
+
+    return currentName === selectedName;
+  }, [currentUserProfile, workerName]);
+
   const workerSelectList = useMemo(() => {
     const currentUserAsWorker: WorkplaceUser | null = currentUserProfile
       ? {
-          id: currentUserProfile.id ?? currentUserProfile.userId,
-          userId: currentUserProfile.userId ?? currentUserProfile.id,
+          id: currentUserProfile.id ?? currentUserProfile.userId ?? currentUserId,
+          userId: currentUserProfile.userId ?? currentUserProfile.id ?? currentUserId,
           name: currentUserProfile.name,
           userName: currentUserProfile.userName,
           nickname: currentUserProfile.nickname,
@@ -438,7 +444,7 @@ export default function ScheduleRegisterScreen() {
       : filteredUsers;
 
     return removeDuplicateUsers(merged);
-  }, [currentUserProfile, workplaceUsers]);
+  }, [currentUserProfile, currentUserId, workplaceUsers]);
 
   const pad = (v: number) => String(v).padStart(2, '0');
 
@@ -471,6 +477,10 @@ export default function ScheduleRegisterScreen() {
 
   const selectedDateText = useMemo(() => toDateString(selectedDate), [selectedDate]);
 
+  const shouldUseAdminPatch = useMemo(() => {
+    return params.editAsAdmin === 'true' || isAdminLike;
+  }, [params.editAsAdmin, isAdminLike]);
+
   const prevMonth = () => {
     if (calMonth === 0) {
       setCalMonth(11);
@@ -496,13 +506,20 @@ export default function ScheduleRegisterScreen() {
     selectedDate.getDate() === day;
 
   const goScheduleWithRefresh = (dateText: string) => {
-    router.replace({
+    const target = {
       pathname: '/schedule',
       params: {
         refreshAt: String(Date.now()),
         selectedDate: dateText,
       },
-    });
+    };
+
+    if (typeof (router as any).dismissTo === 'function') {
+      (router as any).dismissTo(target);
+      return;
+    }
+
+    (router as any).navigate(target);
   };
 
   const loadProfile = useCallback(async () => {
@@ -610,14 +627,19 @@ export default function ScheduleRegisterScreen() {
   };
 
   const handleSelectWorker = (user: WorkplaceUser) => {
+    const selectedName = getDisplayName(user);
     const userId = getUserId(user);
-    const name = getDisplayName(user);
+    const isMe = currentUserProfile ? isSameUser(user, currentUserProfile) : false;
 
     if (userId != null) {
       setSelectedUserId(Number(userId));
+    } else if (isMe && currentUserId != null) {
+      setSelectedUserId(Number(currentUserId));
+    } else {
+      setSelectedUserId(null);
     }
 
-    setWorkerName(name);
+    setWorkerName(selectedName);
     setWorkerPickerOpen(false);
   };
 
@@ -637,7 +659,7 @@ export default function ScheduleRegisterScreen() {
       return false;
     }
 
-    if (!isEditMode && isAdminLike && !selectedUserId && !currentUserId) {
+    if (!isEditMode && isAdminLike && !selectedUserId && !currentUserId && !selectedWorkerIsMe) {
       Alert.alert('입력 오류', '근무자를 선택해주세요.');
       return false;
     }
@@ -652,9 +674,9 @@ export default function ScheduleRegisterScreen() {
         : `/schedule/date?date=${dateText}`;
 
       const result = await apiRequest(endpoint);
-      console.log('등록 후 스케줄 재조회 성공:', endpoint, result);
+      console.log('등록/수정 후 스케줄 재조회 성공:', endpoint, result);
     } catch (error: any) {
-      console.log('등록 후 스케줄 재조회 실패:', error?.message || error);
+      console.log('등록/수정 후 스케줄 재조회 실패:', error?.message || error);
     }
   };
 
@@ -669,7 +691,18 @@ export default function ScheduleRegisterScreen() {
       closeTimeModals();
 
       if (isEditMode) {
-        const endpoint = isAdminLike ? '/schedule/patch-admin' : '/schedule/patch';
+        const endpoint = shouldUseAdminPatch ? '/schedule/patch-admin' : '/schedule/patch';
+
+        console.log('스케줄 수정 요청:', {
+          endpoint,
+          editAsAdmin: params.editAsAdmin,
+          isAdminLike,
+          shouldUseAdminPatch,
+          scheduleId: Number(params.editId),
+          newStartTime: startStr,
+          newEndTime: endStr,
+          newNote: note.trim(),
+        });
 
         await apiRequest(endpoint, {
           method: 'PATCH',
@@ -704,14 +737,24 @@ export default function ScheduleRegisterScreen() {
 
       const targetUserId = selectedUserId ?? currentUserId;
 
+      const isSelfSchedule =
+        selectedWorkerIsMe ||
+        (currentUserId != null &&
+          targetUserId != null &&
+          Number(currentUserId) === Number(targetUserId));
+
       console.log('스케줄 등록 요청:', {
         isAdminLike,
+        isSelfSchedule,
+        selectedWorkerIsMe,
+        currentUserId,
+        selectedUserId,
         targetUserId,
         workerName,
         body: requestBody,
       });
 
-      if (isAdminLike) {
+      if (isAdminLike && !isSelfSchedule) {
         if (!targetUserId) {
           Alert.alert('입력 오류', '근무자를 선택해주세요.');
           return;
@@ -863,7 +906,7 @@ export default function ScheduleRegisterScreen() {
 
           {isEditMode && (
             <Text style={s.helperText}>
-              스케줄 수정 API는 날짜 변경을 지원하지 않아 시간과 메모만 수정할 수 있습니다.
+              스케줄 수정 시 날짜는 변경할 수 없고, 시간과 메모만 수정할 수 있습니다.
             </Text>
           )}
 
@@ -1073,14 +1116,15 @@ export default function ScheduleRegisterScreen() {
                       Number(selectedUserId) === Number(userId);
 
                     const isMe =
-                      currentUserId != null &&
-                      userId != null &&
-                      Number(currentUserId) === Number(userId);
+                      currentUserProfile ? isSameUser(user, currentUserProfile) : false;
 
                     return (
                       <TouchableOpacity
                         key={`worker-${userId ?? 'no-id'}-${normalizeText(name)}-${index}`}
-                        style={[wm.userItem, selected && wm.userItemActive]}
+                        style={[
+                          wm.userItem,
+                          (selected || (isMe && selectedWorkerIsMe)) && wm.userItemActive,
+                        ]}
                         onPress={() => handleSelectWorker(user)}
                         activeOpacity={0.8}
                       >
@@ -1088,13 +1132,23 @@ export default function ScheduleRegisterScreen() {
                           <Ionicons
                             name={isMe ? 'person-circle' : 'person'}
                             size={18}
-                            color={selected ? MAIN_COLOR : '#888'}
+                            color={
+                              selected || (isMe && selectedWorkerIsMe)
+                                ? MAIN_COLOR
+                                : '#888'
+                            }
                           />
                         </View>
 
                         <View style={{ flex: 1 }}>
                           <View style={wm.nameRow}>
-                            <Text style={[wm.userName, selected && wm.userNameActive]}>
+                            <Text
+                              style={[
+                                wm.userName,
+                                (selected || (isMe && selectedWorkerIsMe)) &&
+                                  wm.userNameActive,
+                              ]}
+                            >
                               {name}
                             </Text>
 
@@ -1108,7 +1162,7 @@ export default function ScheduleRegisterScreen() {
                           {!!user.role && <Text style={wm.userRole}>{user.role}</Text>}
                         </View>
 
-                        {selected && (
+                        {(selected || (isMe && selectedWorkerIsMe)) && (
                           <Ionicons name="checkmark-circle" size={20} color={MAIN_COLOR} />
                         )}
                       </TouchableOpacity>

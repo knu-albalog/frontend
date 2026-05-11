@@ -111,6 +111,27 @@ function getDayOffsetFromToday(date: Date) {
   return Math.round((target.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
 }
 
+function normalizeName(value?: string | null) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isAdminRole(role?: string | null) {
+  const upperRole = String(role || '').trim().toUpperCase();
+
+  return (
+    upperRole.includes('ADMIN') ||
+    upperRole.includes('OWNER') ||
+    upperRole.includes('MANAGER') ||
+    upperRole.includes('BOSS') ||
+    upperRole.includes('EMPLOYER') ||
+    upperRole.includes('STORE_OWNER') ||
+    upperRole.includes('WORKPLACE_OWNER') ||
+    upperRole.includes('사장') ||
+    upperRole.includes('점주') ||
+    upperRole.includes('관리자')
+  );
+}
+
 async function scheduleReadRequest<T>(endpoint: string): Promise<T | null> {
   try {
     return (await apiRequest(endpoint)) as T | null;
@@ -118,6 +139,27 @@ async function scheduleReadRequest<T>(endpoint: string): Promise<T | null> {
     console.log('스케줄 조회 실패:', endpoint, error?.message || error);
     return null;
   }
+}
+
+async function deleteScheduleByPermission(
+  scheduleId: number | string,
+  isAdminLike: boolean
+) {
+  const encodedScheduleId = encodeURIComponent(String(scheduleId));
+
+  if (isAdminLike) {
+    // Swagger 기준: DELETE /schedule/delete-admin?scheduleId=1
+    // scheduleId는 array<integer> query지만 1개 삭제 시 scheduleId=1 형태로 전송
+    await apiRequest(`/schedule/delete-admin?scheduleId=${encodedScheduleId}`, {
+      method: 'DELETE',
+    });
+    return;
+  }
+
+  // 유저 본인 근무 삭제
+  await apiRequest(`/schedule/delete?scheduleId=${encodedScheduleId}`, {
+    method: 'DELETE',
+  });
 }
 
 type UserProfile = {
@@ -146,6 +188,7 @@ type MyScheduleResponse = {
 };
 
 type ScheduleWorker = {
+  id?: number | null;
   userId?: number | null;
   scheduleId?: number | null;
   userName?: string | null;
@@ -238,15 +281,85 @@ function getShiftDedupeKey(item: TeamShift) {
   ].join('|');
 }
 
+function getLooseShiftIdentityKey(item: TeamShift) {
+  return [
+    item.userId ?? 'no-user-id',
+    toDateString(item.date),
+    normalizeName(item.originalWorker),
+  ].join('|');
+}
+
+function getExactShiftIdentityKey(item: TeamShift) {
+  return [
+    item.userId ?? 'no-user-id',
+    toDateString(item.date),
+    item.start,
+    item.end,
+    normalizeName(item.originalWorker),
+  ].join('|');
+}
+
+function fillMissingShiftIds(newItems: TeamShift[], oldItems: TeamShift[]) {
+  const oldExactMap = new Map<string, TeamShift>();
+  const oldLooseMap = new Map<string, TeamShift[]>();
+
+  oldItems.forEach((oldItem) => {
+    if (!oldItem.id) return;
+
+    oldExactMap.set(getExactShiftIdentityKey(oldItem), oldItem);
+
+    const looseKey = getLooseShiftIdentityKey(oldItem);
+    const list = oldLooseMap.get(looseKey) || [];
+    list.push(oldItem);
+    oldLooseMap.set(looseKey, list);
+  });
+
+  return newItems.map((newItem) => {
+    if (newItem.id) return newItem;
+
+    const exactMatched = oldExactMap.get(getExactShiftIdentityKey(newItem));
+
+    if (exactMatched?.id) {
+      return {
+        ...newItem,
+        id: exactMatched.id,
+      };
+    }
+
+    const looseMatchedList = oldLooseMap.get(getLooseShiftIdentityKey(newItem)) || [];
+
+    if (looseMatchedList.length === 1 && looseMatchedList[0]?.id) {
+      return {
+        ...newItem,
+        id: looseMatchedList[0].id,
+      };
+    }
+
+    return newItem;
+  });
+}
+
 function dedupeShifts(items: TeamShift[]) {
   const map = new Map<string, TeamShift>();
 
   items.forEach((item) => {
     const key = getShiftDedupeKey(item);
+    const existing = map.get(key);
 
-    if (!map.has(key)) {
+    if (!existing) {
       map.set(key, item);
+      return;
     }
+
+    map.set(key, {
+      ...existing,
+      id: existing.id ?? item.id,
+      userId: existing.userId ?? item.userId,
+      note: existing.note || item.note || '',
+      isMine: Boolean(existing.isMine || item.isMine),
+      isSubstituted: Boolean(existing.isSubstituted || item.isSubstituted),
+      substituteWorker: existing.substituteWorker || item.substituteWorker,
+    });
   });
 
   return Array.from(map.values());
@@ -268,9 +381,41 @@ function normalizeScheduleAllList(data: ScheduleAllByDate[] | null): ScheduleAll
   return data;
 }
 
+function isMineByUserId(currentUserId?: number, targetUserId?: number | null) {
+  if (currentUserId == null || targetUserId == null) {
+    return false;
+  }
+
+  return Number(currentUserId) === Number(targetUserId);
+}
+
+function isMineByUserName(currentUserName: string, targetUserName?: string | null) {
+  const me = normalizeName(currentUserName);
+  const target = normalizeName(targetUserName);
+
+  if (!me || !target) {
+    return false;
+  }
+
+  return me === target;
+}
+
+function isMyShift(
+  shift: TeamShift,
+  currentUserId?: number,
+  currentUserName: string = ''
+) {
+  return (
+    !!shift.isMine ||
+    isMineByUserId(currentUserId, shift.userId) ||
+    isMineByUserName(currentUserName, shift.originalWorker)
+  );
+}
+
 function convertAllScheduleListToShifts(
   data: ScheduleAllByDate[] | null,
-  currentUserId?: number
+  currentUserId?: number,
+  currentUserName: string = ''
 ): TeamShift[] {
   const days = normalizeScheduleAllList(data);
 
@@ -280,7 +425,7 @@ function convertAllScheduleListToShifts(
     return normalizeScheduleWorkers(day)
       .filter((worker) => worker.startTime && worker.endTime)
       .map((worker) => ({
-        id: worker.scheduleId ?? null,
+        id: worker.scheduleId ?? worker.id ?? null,
         userId: worker.userId ?? null,
         start: formatTime(worker.startTime),
         end: formatTime(worker.endTime),
@@ -288,9 +433,8 @@ function convertAllScheduleListToShifts(
         originalWorker: worker.userName || '이름 없음',
         note: worker.note || '',
         isMine:
-          currentUserId && worker.userId
-            ? Number(worker.userId) === Number(currentUserId)
-            : false,
+          isMineByUserId(currentUserId, worker.userId) ||
+          isMineByUserName(currentUserName, worker.userName),
         isSubstituted: false,
       }));
   });
@@ -300,14 +444,15 @@ function convertAllScheduleListToShifts(
 
 function convertDateAllToShifts(
   data: ScheduleAllByDate | null,
-  currentUserId?: number
+  currentUserId?: number,
+  currentUserName: string = ''
 ): TeamShift[] {
   if (!data?.workDate) return [];
 
   const converted = normalizeScheduleWorkers(data)
     .filter((worker) => worker.startTime && worker.endTime)
     .map((worker) => ({
-      id: worker.scheduleId ?? null,
+      id: worker.scheduleId ?? worker.id ?? null,
       userId: worker.userId ?? null,
       start: formatTime(worker.startTime),
       end: formatTime(worker.endTime),
@@ -315,9 +460,8 @@ function convertDateAllToShifts(
       originalWorker: worker.userName || '이름 없음',
       note: worker.note || '',
       isMine:
-        currentUserId && worker.userId
-          ? Number(worker.userId) === Number(currentUserId)
-          : false,
+        isMineByUserId(currentUserId, worker.userId) ||
+        isMineByUserName(currentUserName, worker.userName),
       isSubstituted: false,
     }));
 
@@ -326,7 +470,8 @@ function convertDateAllToShifts(
 
 function convertMyScheduleResponseToShifts(
   data: MyScheduleResponse | null,
-  currentUserId?: number
+  currentUserId?: number,
+  currentUserName: string = ''
 ): TeamShift[] {
   if (!data?.scheduleDates || !Array.isArray(data.scheduleDates)) {
     return [];
@@ -340,7 +485,7 @@ function convertMyScheduleResponseToShifts(
       start: formatTime(item.startTime),
       end: formatTime(item.endTime),
       date: parseDateLocal(item.workDate),
-      originalWorker: data.userName || '나',
+      originalWorker: data.userName || currentUserName || '나',
       note: item.note || '',
       isMine: true,
       isSubstituted: false,
@@ -349,7 +494,8 @@ function convertMyScheduleResponseToShifts(
 
 function convertScheduleItemToShift(
   item: ScheduleItemResponse,
-  currentUserId?: number
+  currentUserId?: number,
+  currentUserName: string = ''
 ): TeamShift | null {
   if (!item.workDate || !item.startTime || !item.endTime) {
     return null;
@@ -364,9 +510,8 @@ function convertScheduleItemToShift(
     originalWorker: item.userName || '이름 없음',
     note: item.note || '',
     isMine:
-      currentUserId && item.userId
-        ? Number(item.userId) === Number(currentUserId)
-        : false,
+      isMineByUserId(currentUserId, item.userId) ||
+      isMineByUserName(currentUserName, item.userName),
     isSubstituted: false,
   };
 }
@@ -398,6 +543,7 @@ export default function ScheduleScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [currentUserId, setCurrentUserId] = useState<number | undefined>();
+  const [currentUserName, setCurrentUserName] = useState('');
   const [currentUserRole, setCurrentUserRole] = useState('');
 
   const [shifts, setShifts] = useState<TeamShift[]>([]);
@@ -408,14 +554,16 @@ export default function ScheduleScreen() {
   const [subRequests, setSubRequests] = useState<SubRequest[]>([]);
 
   const isAdminLike = useMemo(() => {
-    const role = currentUserRole.toUpperCase();
-
-    return (
-      role.includes('ADMIN') ||
-      role.includes('OWNER') ||
-      role.includes('MANAGER')
-    );
+    return isAdminRole(currentUserRole);
   }, [currentUserRole]);
+
+  const canManageShift = useCallback(
+    (shift: TeamShift) => {
+      if (isAdminLike) return true;
+      return isMyShift(shift, currentUserId, currentUserName);
+    },
+    [isAdminLike, currentUserId, currentUserName]
+  );
 
   const weekDates = useMemo(() => getWeekDates(currentWeekBase), [currentWeekBase]);
 
@@ -454,12 +602,22 @@ export default function ScheduleScreen() {
 
       const userId = profile.id ?? profile.userId ?? undefined;
       const role = profile.role ?? '';
+      const name = profile.nickname || profile.name || profile.userName || '';
+
+      console.log('현재 사용자 프로필:', {
+        userId,
+        role,
+        name,
+        isAdminLike: isAdminRole(role),
+      });
 
       setCurrentUserId(userId || undefined);
+      setCurrentUserName(name);
       setCurrentUserRole(role);
     } catch (error: any) {
       console.log('프로필 조회 실패:', error?.message || error);
       setCurrentUserId(undefined);
+      setCurrentUserName('');
       setCurrentUserRole('');
     }
   }, []);
@@ -472,7 +630,11 @@ export default function ScheduleScreen() {
         `/schedule/period-all?startDate=${visibleWeekRange.startDate}&endDate=${visibleWeekRange.endDate}`
       );
 
-      const converted = convertAllScheduleListToShifts(data, currentUserId);
+      const converted = convertAllScheduleListToShifts(
+        data,
+        currentUserId,
+        currentUserName
+      );
 
       setShifts((prev) => {
         const weekStart = parseDateLocal(visibleWeekRange.startDate);
@@ -486,12 +648,19 @@ export default function ScheduleScreen() {
           return t < weekStart.getTime() || t > weekEnd.getTime();
         });
 
-        return dedupeShifts([...outsideWeek, ...converted]);
+        const convertedWithIds = fillMissingShiftIds(converted, prev);
+
+        return dedupeShifts([...outsideWeek, ...convertedWithIds]);
       });
     } finally {
       setLoading(false);
     }
-  }, [visibleWeekRange.startDate, visibleWeekRange.endDate, currentUserId]);
+  }, [
+    visibleWeekRange.startDate,
+    visibleWeekRange.endDate,
+    currentUserId,
+    currentUserName,
+  ]);
 
   const loadMyWeekDateDots = useCallback(async () => {
     const data = await scheduleReadRequest<MyScheduleResponse>(
@@ -530,19 +699,37 @@ export default function ScheduleScreen() {
           : Promise.resolve(null),
       ]);
 
-      const allShifts = convertDateAllToShifts(allData, currentUserId);
-      const myDateShifts = convertMyScheduleResponseToShifts(myDateData, currentUserId);
-      const myTodayShifts = convertMyScheduleResponseToShifts(myDayData, currentUserId);
+      const myDateShifts = convertMyScheduleResponseToShifts(
+        myDateData,
+        currentUserId,
+        currentUserName
+      );
+      const myTodayShifts = convertMyScheduleResponseToShifts(
+        myDayData,
+        currentUserId,
+        currentUserName
+      );
+      const allShifts = convertDateAllToShifts(
+        allData,
+        currentUserId,
+        currentUserName
+      );
 
       const selectedDateShifts = dedupeShifts([
-        ...allShifts,
         ...myDateShifts,
         ...myTodayShifts,
+        ...allShifts,
       ]);
 
       setShifts((prev) => {
+        const sameDayPrevious = prev.filter((item) => isSameDay(item.date, selectedDate));
         const others = prev.filter((item) => !isSameDay(item.date, selectedDate));
-        return dedupeShifts([...others, ...selectedDateShifts]);
+        const selectedDateShiftsWithIds = fillMissingShiftIds(
+          selectedDateShifts,
+          sameDayPrevious
+        );
+
+        return dedupeShifts([...others, ...selectedDateShiftsWithIds]);
       });
 
       setMyWeekDateSet((prev) => {
@@ -561,7 +748,7 @@ export default function ScheduleScreen() {
     } finally {
       setDateLoading(false);
     }
-  }, [selectedDate, currentUserId]);
+  }, [selectedDate, currentUserId, currentUserName]);
 
   const loadMonthSchedules = useCallback(async () => {
     const offset = getMonthOffsetFromToday(currentWeekBase);
@@ -587,9 +774,13 @@ export default function ScheduleScreen() {
       return;
     }
 
-    const converted = convertScheduleItemToShift(data, currentUserId);
+    const converted = convertScheduleItemToShift(
+      data,
+      currentUserId,
+      currentUserName
+    );
     setNextShift(converted);
-  }, [currentUserId]);
+  }, [currentUserId, currentUserName]);
 
   const refreshAll = useCallback(async () => {
     setRefreshing(true);
@@ -699,12 +890,22 @@ export default function ScheduleScreen() {
   };
 
   const openActionSheet = (shift: TeamShift) => {
+    if (!canManageShift(shift)) {
+      return;
+    }
+
     setSelectedShift(shift);
     setActionSheetVisible(true);
   };
 
   const handleEdit = () => {
     if (!selectedShift) return;
+
+    if (!canManageShift(selectedShift)) {
+      Alert.alert('수정 불가', '다른 직원의 근무는 수정할 수 없습니다.');
+      setActionSheetVisible(false);
+      return;
+    }
 
     if (!selectedShift.id) {
       Alert.alert('수정 불가', '스케줄 ID가 없어 수정할 수 없습니다.');
@@ -723,12 +924,19 @@ export default function ScheduleScreen() {
         editDate: toDateString(selectedShift.date),
         editTime: `${selectedShift.start} ~ ${selectedShift.end}`,
         editNote: selectedShift.note || '',
+        editAsAdmin: isAdminLike ? 'true' : 'false',
       },
     });
   };
 
   const handleDelete = () => {
     if (!selectedShift) return;
+
+    if (!canManageShift(selectedShift)) {
+      Alert.alert('삭제 불가', '다른 직원의 근무는 삭제할 수 없습니다.');
+      setActionSheetVisible(false);
+      return;
+    }
 
     if (!selectedShift.id) {
       Alert.alert('삭제 불가', '스케줄 ID가 없어 삭제할 수 없습니다.');
@@ -753,13 +961,14 @@ export default function ScheduleScreen() {
             style: 'destructive',
             onPress: async () => {
               try {
-                const endpoint = isAdminLike
-                  ? `/schedule/delete-admin?scheduleId=${idToDelete}`
-                  : `/schedule/delete?scheduleId=${idToDelete}`;
-
-                await apiRequest(endpoint, {
-                  method: 'DELETE',
+                console.log('스케줄 삭제 요청:', {
+                  isAdminLike,
+                  scheduleId: idToDelete,
+                  workerName,
+                  timeText,
                 });
+
+                await deleteScheduleByPermission(idToDelete, isAdminLike);
 
                 setShifts((prev) =>
                   prev.filter((s) => String(s.id) !== String(idToDelete))
@@ -898,7 +1107,11 @@ export default function ScheduleScreen() {
 
                 const hasMyEvent =
                   myWeekDateSet.has(dateText) ||
-                  shifts.some((s) => isSameDay(s.date, date) && s.isMine);
+                  shifts.some(
+                    (s) =>
+                      isSameDay(s.date, date) &&
+                      isMyShift(s, currentUserId, currentUserName)
+                  );
 
                 return (
                   <TouchableOpacity
@@ -955,56 +1168,63 @@ export default function ScheduleScreen() {
             </View>
 
             {dailyShifts.length > 0 ? (
-              dailyShifts.map((item, index) => (
-                <View key={makeShiftStableKey(item, index)} style={styles.shiftCard}>
-                  <View style={styles.shiftCardLeft}>
-                    <View style={styles.shiftTopRow}>
-                      <Text style={styles.shiftTimeText}>
-                        {item.start} ~ {item.end}
-                      </Text>
+              dailyShifts.map((item, index) => {
+                const itemIsMine = isMyShift(item, currentUserId, currentUserName);
+                const showMoreButton = canManageShift(item);
 
-                      {item.isMine && (
-                        <View style={styles.myBadge}>
-                          <Text style={styles.myBadgeText}>내 근무</Text>
+                return (
+                  <View key={makeShiftStableKey(item, index)} style={styles.shiftCard}>
+                    <View style={styles.shiftCardLeft}>
+                      <View style={styles.shiftTopRow}>
+                        <Text style={styles.shiftTimeText}>
+                          {item.start} ~ {item.end}
+                        </Text>
+
+                        {itemIsMine && (
+                          <View style={styles.myBadge}>
+                            <Text style={styles.myBadgeText}>내 근무</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {item.isSubstituted ? (
+                        <View style={styles.substitutedRow}>
+                          <Text style={styles.originalWorkerText}>
+                            {item.originalWorker}
+                          </Text>
+                          <Ionicons
+                            name="arrow-forward"
+                            size={14}
+                            color={MAIN_COLOR}
+                            style={{ marginHorizontal: 6 }}
+                          />
+                          <Text style={styles.substituteWorkerText}>
+                            {item.substituteWorker} 근무
+                          </Text>
                         </View>
+                      ) : (
+                        <Text style={styles.normalWorkerText}>
+                          {item.originalWorker} 근무
+                        </Text>
+                      )}
+
+                      {!!item.note && (
+                        <Text style={styles.noteText}>메모: {item.note}</Text>
                       )}
                     </View>
 
-                    {item.isSubstituted ? (
-                      <View style={styles.substitutedRow}>
-                        <Text style={styles.originalWorkerText}>
-                          {item.originalWorker}
-                        </Text>
-                        <Ionicons
-                          name="arrow-forward"
-                          size={14}
-                          color={MAIN_COLOR}
-                          style={{ marginHorizontal: 6 }}
-                        />
-                        <Text style={styles.substituteWorkerText}>
-                          {item.substituteWorker} 근무
-                        </Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.normalWorkerText}>
-                        {item.originalWorker} 근무
-                      </Text>
-                    )}
-
-                    {!!item.note && (
-                      <Text style={styles.noteText}>메모: {item.note}</Text>
+                    {showMoreButton && (
+                      <TouchableOpacity
+                        style={styles.moreBtn}
+                        onPress={() => openActionSheet(item)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="ellipsis-vertical" size={18} color="#BBBBBB" />
+                      </TouchableOpacity>
                     )}
                   </View>
-
-                  <TouchableOpacity
-                    style={styles.moreBtn}
-                    onPress={() => openActionSheet(item)}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  >
-                    <Ionicons name="ellipsis-vertical" size={18} color="#BBBBBB" />
-                  </TouchableOpacity>
-                </View>
-              ))
+                );
+              })
             ) : (
               <View style={styles.emptyBox}>
                 <Text style={styles.emptyText}>예정된 근무 일정이 없어요.</Text>
