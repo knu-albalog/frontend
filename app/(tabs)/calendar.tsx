@@ -21,6 +21,30 @@ type ShiftItem = {
   date: Date;
 };
 
+type ScheduleDate = {
+  id?: number | null;
+  scheduleId?: number | null;
+  workDate?: string | null;
+  date?: string | null;
+  scheduleDate?: string | null;
+  startTime?: string | null;
+  start?: string | null;
+  endTime?: string | null;
+  end?: string | null;
+  note?: string | null;
+};
+
+type MyScheduleResponse = {
+  userId?: number | null;
+  userName?: string | null;
+  workplaceId?: number | null;
+  workplaceName?: string | null;
+  scheduleDates?: ScheduleDate[];
+  schedules?: ScheduleDate[];
+  content?: ScheduleDate[];
+  data?: ScheduleDate[] | ScheduleDate | null;
+};
+
 const MAIN_COLOR = '#2140DC';
 const WEEKDAY_KR = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -63,16 +87,20 @@ function getShiftSortPriority(date: Date) {
 function getWeekStart(date: Date) {
   const copy = new Date(date);
   const day = copy.getDay();
+
   copy.setDate(copy.getDate() - day);
   copy.setHours(0, 0, 0, 0);
+
   return copy;
 }
 
 function getWeekEnd(date: Date) {
   const start = getWeekStart(date);
   const end = new Date(start);
+
   end.setDate(start.getDate() + 6);
   end.setHours(23, 59, 59, 999);
+
   return end;
 }
 
@@ -148,92 +176,84 @@ function parseTimeValue(value: any, fallback = '00:00') {
   return fallback;
 }
 
-function extractScheduleArray(result: any): any[] {
-  const source = Array.isArray(result)
-    ? result
-    : result?.schedules ??
-      result?.scheduleList ??
-      result?.scheduleResponses ??
-      result?.content ??
-      result?.data ??
-      result?.items ??
-      [];
-
-  if (!Array.isArray(source)) {
+function extractMyScheduleArray(result: MyScheduleResponse | ScheduleDate[] | any): ScheduleDate[] {
+  if (!result) {
     return [];
   }
 
-  return source.flatMap((item: any) => {
-    const nested =
-      item?.schedules ??
-      item?.scheduleList ??
-      item?.scheduleResponses ??
-      item?.items ??
-      item?.workSchedules;
+  if (Array.isArray(result)) {
+    return result;
+  }
 
-    if (Array.isArray(nested)) {
-      return nested.map((nestedItem: any) => ({
-        ...nestedItem,
-        date:
-          nestedItem?.date ??
-          nestedItem?.workDate ??
-          nestedItem?.scheduleDate ??
-          item?.date ??
-          item?.workDate ??
-          item?.scheduleDate,
-      }));
-    }
+  if (Array.isArray(result.scheduleDates)) {
+    return result.scheduleDates;
+  }
 
-    return [item];
-  });
+  if (Array.isArray(result.schedules)) {
+    return result.schedules;
+  }
+
+  if (Array.isArray(result.content)) {
+    return result.content;
+  }
+
+  if (Array.isArray(result.data)) {
+    return result.data;
+  }
+
+  if (result.data && typeof result.data === 'object') {
+    return [result.data];
+  }
+
+  if (result.workDate || result.startTime || result.endTime) {
+    return [result];
+  }
+
+  return [];
 }
 
-function normalizeScheduleItem(item: any, index: number): ShiftItem {
-  const dateValue =
-    item?.workDate ??
-    item?.date ??
-    item?.scheduleDate ??
-    item?.workDay ??
-    item?.startDate ??
-    item?.startDateTime ??
-    item?.startAt;
-
-  const startValue =
-    item?.startTime ??
-    item?.start ??
-    item?.workStartTime ??
-    item?.scheduleStartTime ??
-    item?.startDateTime ??
-    item?.startAt;
-
-  const endValue =
-    item?.endTime ??
-    item?.end ??
-    item?.workEndTime ??
-    item?.scheduleEndTime ??
-    item?.endDateTime ??
-    item?.endAt;
+function normalizeScheduleItem(item: ScheduleDate, index: number): ShiftItem {
+  const dateValue = item?.workDate ?? item?.date ?? item?.scheduleDate;
+  const startValue = item?.startTime ?? item?.start;
+  const endValue = item?.endTime ?? item?.end;
 
   return {
-    id: String(item?.id ?? item?.scheduleId ?? item?.workScheduleId ?? index + 1),
+    id: String(item?.id ?? item?.scheduleId ?? index + 1),
     start: parseTimeValue(startValue, '00:00'),
     end: parseTimeValue(endValue, '00:00'),
     date: parseDateValue(dateValue),
   };
 }
 
+function dedupeShifts(items: ShiftItem[]) {
+  const map = new Map<string, ShiftItem>();
+
+  items.forEach((item) => {
+    const key = [
+      item.id,
+      formatDateForApi(item.date),
+      item.start,
+      item.end,
+    ].join('|');
+
+    if (!map.has(key)) {
+      map.set(key, item);
+    }
+  });
+
+  return Array.from(map.values());
+}
+
 export default function CalendarScreen() {
   const insets = useSafeAreaInsets();
 
-  const initialSelectedDate = new Date();
-
-  const [selectedDate, setSelectedDate] = useState(initialSelectedDate);
-  const [currentWeekBase, setCurrentWeekBase] = useState(initialSelectedDate);
+  const [today, setToday] = useState(new Date());
+  const [currentWeekBase, setCurrentWeekBase] = useState(new Date());
   const [pickerVisible, setPickerVisible] = useState(false);
   const [scheduleLoading, setScheduleLoading] = useState(true);
 
-  const [tempYear, setTempYear] = useState(initialSelectedDate.getFullYear());
-  const [tempMonth, setTempMonth] = useState(initialSelectedDate.getMonth());
+  const [tempYear, setTempYear] = useState(new Date().getFullYear());
+  const [tempMonth, setTempMonth] = useState(new Date().getMonth());
 
   const [shifts, setShifts] = useState<ShiftItem[]>([]);
 
@@ -278,47 +298,44 @@ export default function CalendarScreen() {
     const weekStart = getWeekStart(baseDate);
     const weekEnd = getWeekEnd(baseDate);
 
-    const baseDateText = formatDateForApi(baseDate);
     const startDateText = formatDateForApi(weekStart);
     const endDateText = formatDateForApi(weekEnd);
 
-    const endpoints = [
-      `/schedule/week?date=${baseDateText}`,
-      `/schedule/week?startDate=${startDateText}&endDate=${endDateText}`,
-      `/schedule/week?start=${startDateText}&end=${endDateText}`,
-      `/schedule/period?startDate=${startDateText}&endDate=${endDateText}`,
-      `/schedule/period?start=${startDateText}&end=${endDateText}`,
-    ];
+    try {
+      const result = await apiRequest(
+        `/schedule/period?startDate=${startDateText}&endDate=${endDateText}`
+      );
 
-    let lastError: any = null;
+      console.log('캘린더 내 주간 근무 조회 결과:', result);
 
-    for (const endpoint of endpoints) {
-      try {
-        const result = await apiRequest(endpoint);
-        const scheduleArray = extractScheduleArray(result);
+      const scheduleArray = extractMyScheduleArray(result);
 
-        const normalizedSchedules = scheduleArray
-          .map((item, index) => normalizeScheduleItem(item, index))
-          .filter((item) => targetWeekDates.some((date) => isSameDay(date, item.date)));
+      const normalizedSchedules = scheduleArray
+        .map((item, index) => normalizeScheduleItem(item, index))
+        .filter((item) => targetWeekDates.some((date) => isSameDay(date, item.date)))
+        .filter((item) => item.start && item.end);
 
-        setShifts(normalizedSchedules);
-        setScheduleLoading(false);
-        return;
-      } catch (error: any) {
-        lastError = error;
-      }
+      setShifts(dedupeShifts(normalizedSchedules));
+    } catch (error: any) {
+      console.log('내 주간 스케줄 조회 실패:', error?.message || error);
+      setShifts([]);
+      Alert.alert('오류', '나의 주간 근무 일정을 불러오지 못했습니다.');
+    } finally {
+      setScheduleLoading(false);
     }
-
-    console.log('주간 스케줄 조회 실패:', lastError?.message);
-    setShifts([]);
-    setScheduleLoading(false);
-    Alert.alert('오류', '주간 근무 일정을 불러오지 못했습니다.');
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      loadWeekSchedules(currentWeekBase);
-    }, [currentWeekBase, loadWeekSchedules])
+      const now = new Date();
+
+      setToday(now);
+      setCurrentWeekBase(now);
+      setTempYear(now.getFullYear());
+      setTempMonth(now.getMonth());
+
+      loadWeekSchedules(now);
+    }, [loadWeekSchedules])
   );
 
   const handlePrevWeek = () => {
@@ -326,10 +343,7 @@ export default function CalendarScreen() {
     newDate.setDate(newDate.getDate() - 7);
 
     setCurrentWeekBase(newDate);
-
-    if (!getWeekDates(newDate).some((d) => isSameDay(d, selectedDate))) {
-      setSelectedDate(getWeekDates(newDate)[0]);
-    }
+    loadWeekSchedules(newDate);
   };
 
   const handleNextWeek = () => {
@@ -337,15 +351,12 @@ export default function CalendarScreen() {
     newDate.setDate(newDate.getDate() + 7);
 
     setCurrentWeekBase(newDate);
-
-    if (!getWeekDates(newDate).some((d) => isSameDay(d, selectedDate))) {
-      setSelectedDate(getWeekDates(newDate)[0]);
-    }
+    loadWeekSchedules(newDate);
   };
 
   const openMonthPicker = () => {
-    setTempYear(selectedDate.getFullYear());
-    setTempMonth(selectedDate.getMonth());
+    setTempYear(currentWeekBase.getFullYear());
+    setTempMonth(currentWeekBase.getMonth());
     setPickerVisible(true);
   };
 
@@ -353,8 +364,8 @@ export default function CalendarScreen() {
     const newDate = new Date(tempYear, tempMonth, 1);
 
     setCurrentWeekBase(newDate);
-    setSelectedDate(newDate);
     setPickerVisible(false);
+    loadWeekSchedules(newDate);
   };
 
   const currentYear = new Date().getFullYear();
@@ -379,7 +390,7 @@ export default function CalendarScreen() {
             activeOpacity={0.8}
             onPress={openMonthPicker}
           >
-            <Text style={styles.monthButtonText}>{formatMonthLabel(selectedDate)}</Text>
+            <Text style={styles.monthButtonText}>{formatMonthLabel(currentWeekBase)}</Text>
             <Ionicons name="chevron-down" size={16} color="#222222" />
           </TouchableOpacity>
 
@@ -390,15 +401,15 @@ export default function CalendarScreen() {
 
             <View style={styles.weekRow}>
               {weekDates.map((date) => {
-                const active = isSameDay(date, selectedDate);
+                const active = isSameDay(date, today);
                 const hasShift = shifts.some((shift) => isSameDay(shift.date, date));
 
                 return (
                   <TouchableOpacity
                     key={date.toISOString()}
                     style={[styles.dayChip, active && styles.dayChipActive]}
-                    activeOpacity={0.85}
-                    onPress={() => setSelectedDate(date)}
+                    activeOpacity={1}
+                    disabled
                   >
                     <Text style={[styles.dayNumber, active && styles.dayNumberActive]}>
                       {date.getDate()}
@@ -438,14 +449,14 @@ export default function CalendarScreen() {
 
                 return (
                   <TouchableOpacity
-                    key={item.id}
+                    key={`${item.id}-${formatDateForApi(item.date)}-${item.start}-${item.end}`}
                     style={[
                       styles.shiftCard,
                       todayShift && styles.shiftCardToday,
                       pastShift && styles.shiftCardPast,
                     ]}
                     activeOpacity={0.9}
-                    onPress={() => setSelectedDate(item.date)}
+                    disabled
                   >
                     <View style={styles.shiftTopRow}>
                       <View style={styles.shiftTitleRow}>
@@ -642,9 +653,9 @@ const styles = StyleSheet.create({
   },
 
   dayChip: {
-    width: 36,
+    width: 38,
     height: 58,
-    borderRadius: 18,
+    borderRadius: 19,
     borderWidth: 1,
     borderColor: '#D7D7D7',
     alignItems: 'center',
@@ -683,7 +694,8 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: MAIN_COLOR,
-    marginTop: 4,
+    position: 'absolute',
+    bottom: 6,
   },
 
   shiftDotActive: {
