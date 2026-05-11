@@ -36,6 +36,111 @@ type Notice = {
   createdAt: string;
 };
 
+type ScheduleDate = {
+  id?: number | null;
+  scheduleId?: number | null;
+  workDate?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  note?: string | null;
+};
+
+type MyScheduleResponse = {
+  userId?: number | null;
+  userName?: string | null;
+  workplaceId?: number | null;
+  workplaceName?: string | null;
+  scheduleDates?: ScheduleDate[];
+  schedules?: ScheduleDate[];
+  content?: ScheduleDate[];
+  data?: ScheduleDate[] | ScheduleDate | null;
+};
+
+function toDateString(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+
+  return `${y}-${m}-${d}`;
+}
+
+function formatTime(time?: string | null) {
+  if (!time) return '';
+
+  const parts = time.split(':');
+
+  if (parts.length >= 2) {
+    return `${parts[0].padStart(2, '0')}:${parts[1].padStart(2, '0')}`;
+  }
+
+  return time;
+}
+
+function normalizeScheduleList(data: any): ScheduleDate[] {
+  if (!data) {
+    return [];
+  }
+
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data.scheduleDates)) {
+    return data.scheduleDates;
+  }
+
+  if (Array.isArray(data.schedules)) {
+    return data.schedules;
+  }
+
+  if (Array.isArray(data.content)) {
+    return data.content;
+  }
+
+  if (Array.isArray(data.data)) {
+    return data.data;
+  }
+
+  if (data.data && typeof data.data === 'object') {
+    return [data.data];
+  }
+
+  if (data.workDate || data.startTime || data.endTime) {
+    return [data];
+  }
+
+  return [];
+}
+
+function formatTodayWorkText(data: any) {
+  const schedules = normalizeScheduleList(data).filter(
+    (item) => item.startTime && item.endTime
+  );
+
+  if (schedules.length === 0) {
+    return '오늘 근무 없음';
+  }
+
+  const sortedSchedules = [...schedules].sort((a, b) => {
+    return formatTime(a.startTime).localeCompare(formatTime(b.startTime));
+  });
+
+  const firstSchedule = sortedSchedules[0];
+  const firstTimeText = `${formatTime(firstSchedule.startTime)} ~ ${formatTime(
+    firstSchedule.endTime
+  )}`;
+
+  if (sortedSchedules.length === 1) {
+    return firstTimeText;
+  }
+
+  return `${firstTimeText} 외 ${sortedSchedules.length - 1}건`;
+}
+
+function hasSchedule(data: any) {
+  return normalizeScheduleList(data).some((item) => item.startTime && item.endTime);
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -44,7 +149,7 @@ export default function HomeScreen() {
     name: '사용자',
     role: '알바생',
     workplaceName: '사업장 정보 없음',
-    time: '오늘 근무 확인 필요',
+    time: '오늘 근무 확인 중',
   });
 
   const [avatarColor, setAvatarColor] = useState(MAIN_COLOR);
@@ -69,7 +174,16 @@ export default function HomeScreen() {
       role === 'admin' ||
       role === 'BOSS' ||
       role === 'boss' ||
-      role === '사장님'
+      role === 'MANAGER' ||
+      role === 'manager' ||
+      role === 'EMPLOYER' ||
+      role === 'employer' ||
+      role === 'STORE_OWNER' ||
+      role === 'WORKPLACE_OWNER' ||
+      role === '사장님' ||
+      role === '사장' ||
+      role === '점주' ||
+      role === '관리자'
     ) {
       return '사장님';
     }
@@ -88,6 +202,40 @@ export default function HomeScreen() {
       }
     } catch (e) {
       console.log('색상 불러오기 오류:', e);
+    }
+  };
+
+  const loadTodayWork = async () => {
+    const todayText = toDateString(new Date());
+
+    try {
+      const dayResult = await apiRequest('/schedule/day?offset=0');
+
+      console.log('홈 오늘 근무 day 조회 결과:', dayResult);
+
+      if (hasSchedule(dayResult)) {
+        setUserData((prev) => ({
+          ...prev,
+          time: formatTodayWorkText(dayResult),
+        }));
+        return;
+      }
+
+      const dateResult = await apiRequest(`/schedule/date?date=${todayText}`);
+
+      console.log('홈 오늘 근무 date 조회 결과:', dateResult);
+
+      setUserData((prev) => ({
+        ...prev,
+        time: formatTodayWorkText(dateResult),
+      }));
+    } catch (error: any) {
+      console.log('오늘 근무 조회 실패:', error?.message || error);
+
+      setUserData((prev) => ({
+        ...prev,
+        time: '오늘 근무 확인 필요',
+      }));
     }
   };
 
@@ -125,6 +273,8 @@ export default function HomeScreen() {
     } catch (error: any) {
       console.log('사업장 정보 조회 실패:', error.message);
     }
+
+    await loadTodayWork();
 
     try {
       const boardsResult = await apiRequest('/boards/my');
@@ -240,7 +390,11 @@ export default function HomeScreen() {
           <View style={styles.profileAvatarGroup}>
             <View style={[styles.avatarIcon, { backgroundColor: avatarColor }]}>
               <Ionicons
-                name={userData.role === '사장님' ? 'briefcase-outline' : 'happy-outline'}
+                name={
+                  userData.role === '사장님'
+                    ? 'briefcase-outline'
+                    : 'happy-outline'
+                }
                 size={28}
                 color="#FFFFFF"
               />
@@ -310,7 +464,9 @@ export default function HomeScreen() {
                         styles.noticeBoardBadge,
                         {
                           backgroundColor:
-                            notice.boardCategory === '공지' ? '#F0F4FF' : '#F5F5F5',
+                            notice.boardCategory === '공지'
+                              ? '#F0F4FF'
+                              : '#F5F5F5',
                         },
                       ]}
                     >
@@ -319,7 +475,9 @@ export default function HomeScreen() {
                           styles.noticeBoardText,
                           {
                             color:
-                              notice.boardCategory === '공지' ? '#2140DC' : '#333333',
+                              notice.boardCategory === '공지'
+                                ? '#2140DC'
+                                : '#333333',
                           },
                         ]}
                       >
