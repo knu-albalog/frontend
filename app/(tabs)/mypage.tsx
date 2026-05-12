@@ -493,6 +493,43 @@ export default function MyPageScreen() {
     );
   };
 
+  const handleDeleteWorkplace = () => {
+    Alert.alert(
+      '사업장 삭제',
+      '사업장을 삭제하면 사업장 정보와 소속 직원 정보가 삭제될 수 있습니다.\n정말 삭제하시겠어요?',
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제하기',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiRequest('/workplace', {
+                method: 'DELETE',
+              });
+
+              setWorkplace(null);
+              setStaffList([]);
+              setTempWorkplaceName('');
+
+              Alert.alert('완료', '사업장이 삭제되었습니다.', [
+                {
+                  text: '확인',
+                  onPress: () => {
+                    router.replace('/role-select');
+                  },
+                },
+              ]);
+            } catch (error: any) {
+              console.log('사업장 삭제 실패:', error.message);
+              Alert.alert('삭제 실패', error.message || '다시 시도해주세요.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -649,24 +686,57 @@ export default function MyPageScreen() {
             <Ionicons name="chevron-forward" size={20} color="#B7B7B7" />
           </TouchableOpacity>
 
-          <View style={styles.divider} />
+          {isBoss ? (
+            <>
+              <View style={styles.divider} />
 
-          <TouchableOpacity style={styles.menuRow} activeOpacity={0.8} onPress={handleLeaveWorkplace}>
-            <View style={styles.menuLeft}>
-              <View style={styles.withdrawIconCircle}>
-                <Ionicons name="exit-outline" size={18} color="#E24A4A" />
-              </View>
+              <TouchableOpacity
+                style={styles.menuRow}
+                activeOpacity={0.8}
+                onPress={handleDeleteWorkplace}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={styles.withdrawIconCircle}>
+                    <Ionicons name="trash-outline" size={18} color="#E24A4A" />
+                  </View>
 
-              <View style={styles.menuTextBox}>
-                <Text style={styles.withdrawMenuTitle}>사업장 탈퇴</Text>
-                <Text style={styles.menuDescription}>
-                  현재 소속된 사업장에서 나갑니다
-                </Text>
-              </View>
-            </View>
+                  <View style={styles.menuTextBox}>
+                    <Text style={styles.withdrawMenuTitle}>사업장 삭제</Text>
+                    <Text style={styles.menuDescription}>
+                      현재 사업장을 완전히 삭제합니다
+                    </Text>
+                  </View>
+                </View>
 
-            <Ionicons name="chevron-forward" size={20} color="#B7B7B7" />
-          </TouchableOpacity>
+                <Ionicons name="chevron-forward" size={20} color="#B7B7B7" />
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={styles.divider} />
+
+              <TouchableOpacity
+                style={styles.menuRow}
+                activeOpacity={0.8}
+                onPress={handleLeaveWorkplace}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={styles.withdrawIconCircle}>
+                    <Ionicons name="exit-outline" size={18} color="#E24A4A" />
+                  </View>
+
+                  <View style={styles.menuTextBox}>
+                    <Text style={styles.withdrawMenuTitle}>사업장 탈퇴</Text>
+                    <Text style={styles.menuDescription}>
+                      현재 소속된 사업장에서 나갑니다
+                    </Text>
+                  </View>
+                </View>
+
+                <Ionicons name="chevron-forward" size={20} color="#B7B7B7" />
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -834,12 +904,6 @@ export default function MyPageScreen() {
               )}
             </ScrollView>
 
-            {!isBoss && (
-              <Text style={styles.permissionNotice}>
-                직원 퇴장 기능은 사장님만 사용할 수 있습니다.
-              </Text>
-            )}
-
             <View style={styles.modalButtonRow}>
               <TouchableOpacity
                 style={styles.confirmButton}
@@ -891,14 +955,6 @@ export default function MyPageScreen() {
             <View style={styles.readonlyBox}>
               <Text style={styles.readonlyText}>
                 {workplace?.inviteCode || '초대코드 없음'}
-              </Text>
-            </View>
-
-            <Text style={[styles.infoLabel, { marginTop: 18 }]}>사업장 ID</Text>
-
-            <View style={styles.readonlyBox}>
-              <Text style={styles.readonlyText}>
-                {workplace?.id ? String(workplace.id) : '사업장 정보 없음'}
               </Text>
             </View>
 
